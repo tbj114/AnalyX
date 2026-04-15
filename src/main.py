@@ -19,77 +19,150 @@ from PyQt6.QtWidgets import (
     QTextEdit, QMenuBar, QToolBar, QStatusBar, QFileDialog,
     QMessageBox, QDialog, QFormLayout, QComboBox, QDoubleSpinBox,
     QPushButton, QLabel, QProgressBar, QTabWidget, QDockWidget,
-    QHeaderView, QInputDialog, QCheckBox, QGridLayout, QFrame
+    QHeaderView, QInputDialog, QCheckBox, QGridLayout, QFrame,
+    QLineEdit, QSizePolicy, QMenu, QAction, QStyledItemDelegate
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint
-from PyQt6.QtGui import QAction, QIcon, QFont, QPalette, QColor, QPainter, QBrush, QPen, QLinearGradient
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QPropertyAnimation, QEasingCurve
+from PyQt6.QtGui import (
+    QAction, QIcon, QFont, QPalette, QColor, QPainter, QBrush, QPen, 
+    QLinearGradient, QFontDatabase, QPixmap, QImage, QPainterPath, QRadialGradient
+)
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 
-class CustomTitleBar(QWidget):
+class EditableHeaderView(QHeaderView):
+    def __init__(self, orientation, parent):
+        super().__init__(orientation, parent)
+        self.setSectionsClickable(True)
+        self.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.editing_index = -1
+        self.editor = None
+    
+    def mouseDoubleClickEvent(self, event):
+        index = self.logicalIndexAt(event.pos())
+        if index >= 0:
+            self.edit_header(index)
+        super().mouseDoubleClickEvent(event)
+    
+    def edit_header(self, index):
+        if self.editing_index != -1:
+            self.finish_editing()
+        
+        self.editing_index = index
+        rect = self.sectionRect(index)
+        
+        self.editor = QLineEdit(self)
+        self.editor.setText(self.model().headerData(index, self.orientation()))
+        self.editor.setGeometry(rect)
+        self.editor.selectAll()
+        self.editor.setFocus()
+        
+        self.editor.editingFinished.connect(self.finish_editing)
+        self.editor.show()
+    
+    def finish_editing(self):
+        if self.editing_index != -1 and self.editor:
+            new_text = self.editor.text()
+            if new_text:
+                old_text = self.model().headerData(self.editing_index, self.orientation())
+                if old_text != new_text:
+                    self.model().setHeaderData(self.editing_index, self.orientation(), new_text)
+                    self.parent().on_header_changed(self.editing_index, new_text)
+            
+            self.editor.deleteLater()
+            self.editor = None
+            self.editing_index = -1
+
+
+class ModernTitleBar(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedHeight(40)
+        self.setFixedHeight(36)
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(10, 0, 10, 0)
+        self.layout.setContentsMargins(15, 0, 15, 0)
+        
+        # 创建背景
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, QColor(20, 20, 25))
+        self.setPalette(palette)
+        
+        # 软件标志
+        self.logo_label = QLabel('AnalyX')
+        self.logo_label.setFont(QFont('Arial', 12, QFont.Weight.Bold))
+        self.logo_label.setStyleSheet('color: #6a9bcc;')
         
         # 窗口标题
-        self.title_label = QLabel('AnalyX - 学术统计软件 v1.0')
-        self.title_label.setFont(QFont('Segoe UI', 10, QFont.Weight.Medium))
-        self.title_label.setMinimumWidth(300)
+        self.title_label = QLabel('学术统计软件')
+        self.title_label.setFont(QFont('Arial', 10))
+        self.title_label.setStyleSheet('color: #faf9f5;')
+        
+        # 标题布局
+        title_layout = QHBoxLayout()
+        title_layout.addWidget(self.logo_label)
+        title_layout.addWidget(QLabel(' - '))
+        title_layout.addWidget(self.title_label)
+        title_layout.setSpacing(4)
         
         # 按钮布局
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(6)
         
         # 最小化按钮
         self.min_button = QPushButton('—')
-        self.min_button.setFixedSize(30, 30)
+        self.min_button.setFixedSize(24, 24)
         self.min_button.setStyleSheet('''
             QPushButton {
-                background-color: #3a3a3a;
-                color: white;
-                border: none;
-                border-radius: 4px;
+                background-color: transparent;
+                color: #b0aea5;
+                border: 1px solid #333333;
+                border-radius: 3px;
                 font-size: 14px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #4a4a4a;
+                background-color: #333333;
+                color: #faf9f5;
             }
         ''')
         self.min_button.clicked.connect(self.parent.showMinimized)
         
         # 最大化/还原按钮
         self.max_button = QPushButton('□')
-        self.max_button.setFixedSize(30, 30)
+        self.max_button.setFixedSize(24, 24)
         self.max_button.setStyleSheet('''
             QPushButton {
-                background-color: #3a3a3a;
-                color: white;
-                border: none;
-                border-radius: 4px;
+                background-color: transparent;
+                color: #b0aea5;
+                border: 1px solid #333333;
+                border-radius: 3px;
                 font-size: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #4a4a4a;
+                background-color: #333333;
+                color: #faf9f5;
             }
         ''')
         self.max_button.clicked.connect(self.toggle_maximize)
         
         # 关闭按钮
         self.close_button = QPushButton('✕')
-        self.close_button.setFixedSize(30, 30)
+        self.close_button.setFixedSize(24, 24)
         self.close_button.setStyleSheet('''
             QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
-                border-radius: 4px;
+                background-color: transparent;
+                color: #d97757;
+                border: 1px solid #443333;
+                border-radius: 3px;
                 font-size: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #c0392b;
+                background-color: #d97757;
+                color: #141413;
             }
         ''')
         self.close_button.clicked.connect(self.parent.close)
@@ -97,9 +170,8 @@ class CustomTitleBar(QWidget):
         button_layout.addWidget(self.min_button)
         button_layout.addWidget(self.max_button)
         button_layout.addWidget(self.close_button)
-        button_layout.setSpacing(5)
         
-        self.layout.addWidget(self.title_label)
+        self.layout.addLayout(title_layout)
         self.layout.addStretch()
         self.layout.addLayout(button_layout)
         
@@ -128,6 +200,244 @@ class CustomTitleBar(QWidget):
         self.is_moving = False
 
 
+class ModernMenuBar(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.layout = QHBoxLayout(self)
+        self.layout.setContentsMargins(10, 0, 10, 0)
+        self.layout.setSpacing(0)
+        
+        # 创建背景
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, QColor(25, 25, 30))
+        self.setPalette(palette)
+        
+        # 菜单按钮
+        menu_items = [
+            ('文件', [
+                ('新建项目', 'Ctrl+N', self.parent.new_project),
+                ('打开文件', 'Ctrl+O', self.parent.open_file),
+                ('-', None, None),
+                ('导入', None, None, [
+                    ('CSV 文件', None, self.parent.import_csv),
+                    ('Excel 文件', None, self.parent.import_excel),
+                    ('SPSS .sav 文件', None, self.parent.import_spss)
+                ]),
+                ('-', None, None),
+                ('保存', 'Ctrl+S', self.parent.save_file),
+                ('另存为', 'Ctrl+Shift+S', self.parent.save_file_as),
+                ('-', None, None),
+                ('导出', None, None, [
+                    ('CSV 文件', None, self.parent.export_csv),
+                    ('PDF 文档', None, self.parent.export_pdf)
+                ]),
+                ('-', None, None),
+                ('退出', 'Ctrl+Q', self.parent.close)
+            ]),
+            ('分析', [
+                ('描述统计', None, self.parent.show_descriptive_stats),
+                ('-', None, None),
+                ('t 检验', None, None, [
+                    ('单样本 t 检验', None, self.parent.show_ttest_one_sample),
+                    ('独立样本 t 检验', None, self.parent.show_ttest_independent),
+                    ('配对样本 t 检验', None, self.parent.show_ttest_paired)
+                ]),
+                ('-', None, None),
+                ('单因素 ANOVA', None, self.parent.show_anova),
+                ('-', None, None),
+                ('相关分析', None, self.parent.show_correlation),
+                ('回归分析', None, self.parent.show_regression),
+                ('-', None, None),
+                ('信度分析', None, self.parent.show_reliability)
+            ]),
+            ('图表', [
+                ('直方图', None, self.parent.show_histogram),
+                ('箱线图', None, self.parent.show_boxplot),
+                ('散点图', None, self.parent.show_scatterplot),
+                ('条形图', None, self.parent.show_barchart),
+                ('热力图', None, self.parent.show_heatmap)
+            ]),
+            ('工具', [
+                ('切换主题', None, self.parent.toggle_theme),
+                ('-', None, None),
+                ('关于', None, self.parent.show_about)
+            ])
+        ]
+        
+        for menu_name, items in menu_items:
+            menu_button = QPushButton(menu_name)
+            menu_button.setStyleSheet('''
+                QPushButton {
+                    background-color: transparent;
+                    color: #b0aea5;
+                    border: none;
+                    padding: 8px 16px;
+                    font-size: 11px;
+                    font-weight: 500;
+                }
+                QPushButton:hover {
+                    background-color: rgba(106, 155, 204, 0.1);
+                    color: #6a9bcc;
+                }
+            ''')
+            # 添加下拉菜单功能
+            menu = QMenu(menu_button)
+            self.add_menu_items(menu, items)
+            menu_button.setMenu(menu)
+            self.layout.addWidget(menu_button)
+    
+    def add_menu_items(self, menu, items):
+        for item in items:
+            if len(item) == 3:
+                text, shortcut, callback = item
+                if text == '-':
+                    menu.addSeparator()
+                else:
+                    action = QAction(text, menu)
+                    if shortcut:
+                        action.setShortcut(shortcut)
+                    action.triggered.connect(callback)
+                    menu.addAction(action)
+            elif len(item) == 4:
+                text, shortcut, callback, subitems = item
+                submenu = menu.addMenu(text)
+                self.add_menu_items(submenu, subitems)
+
+
+class ModernToolBar(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.layout = QHBoxLayout(self)
+        self.layout.setContentsMargins(10, 5, 10, 5)
+        self.layout.setSpacing(8)
+        
+        # 创建背景
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, QColor(22, 22, 27))
+        self.setPalette(palette)
+        
+        # 工具栏按钮
+        tool_buttons = [
+            ('新建', 'Ctrl+N', self.parent.new_project),
+            ('打开', 'Ctrl+O', self.parent.open_file),
+            ('保存', 'Ctrl+S', self.parent.save_file)
+        ]
+        
+        for text, shortcut, callback in tool_buttons:
+            button = QPushButton(text)
+            button.setStyleSheet('''
+                QPushButton {
+                    background-color: #2a2a30;
+                    color: #faf9f5;
+                    border: 1px solid #3a3a40;
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                    font-size: 11px;
+                    font-weight: 500;
+                }
+                QPushButton:hover {
+                    background-color: #3a3a40;
+                    border-color: #6a9bcc;
+                }
+                QPushButton:pressed {
+                    background-color: #1a1a20;
+                }
+            ''')
+            button.clicked.connect(callback)
+            self.layout.addWidget(button)
+        
+        # 添加分隔符
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        separator.setStyleSheet('background-color: #3a3a40; margin: 0 8px;')
+        self.layout.addWidget(separator)
+        
+        # 搜索框
+        search_frame = QWidget()
+        search_layout = QHBoxLayout(search_frame)
+        search_layout.setContentsMargins(0, 0, 0, 0)
+        search_layout.setSpacing(5)
+        
+        search_label = QLabel('搜索:')
+        search_label.setStyleSheet('color: #b0aea5; font-size: 11px;')
+        
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText('搜索变量或分析...')
+        self.search_edit.setFixedWidth(150)
+        self.search_edit.setStyleSheet('''
+            QLineEdit {
+                background-color: #2a2a30;
+                color: #faf9f5;
+                border: 1px solid #3a3a40;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            QLineEdit:focus {
+                border-color: #6a9bcc;
+                outline: none;
+            }
+        ''')
+        
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_edit)
+        self.layout.addWidget(search_frame)
+        
+        self.layout.addStretch()
+
+
+class ModernStatusBar(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.layout = QHBoxLayout(self)
+        self.layout.setContentsMargins(10, 4, 10, 4)
+        self.layout.setSpacing(15)
+        
+        # 创建背景
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, QColor(20, 20, 25))
+        self.setPalette(palette)
+        
+        # 状态标签
+        self.status_label = QLabel('就绪')
+        self.status_label.setStyleSheet('color: #b0aea5; font-size: 11px;')
+        
+        # 数据信息
+        self.data_info_label = QLabel('无数据')
+        self.data_info_label.setStyleSheet('color: #788c5d; font-size: 11px;')
+        
+        # 进度条
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setFixedWidth(150)
+        self.progress_bar.setStyleSheet('''
+            QProgressBar {
+                background-color: #2a2a30;
+                border: 1px solid #3a3a40;
+                border-radius: 3px;
+                text-align: center;
+                color: #faf9f5;
+                height: 10px;
+            }
+            QProgressBar::chunk {
+                background-color: #6a9bcc;
+                border-radius: 2px;
+            }
+        ''')
+        
+        self.layout.addWidget(self.status_label)
+        self.layout.addWidget(self.data_info_label)
+        self.layout.addStretch()
+        self.layout.addWidget(self.progress_bar)
+
+
 class AnalyXMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -140,7 +450,7 @@ class AnalyXMainWindow(QMainWindow):
 
     def init_ui(self):
         # 设置窗口属性
-        self.setWindowTitle('AnalyX - 学术统计软件 v1.0')
+        self.setWindowTitle('AnalyX - 学术统计软件')
         self.setMinimumSize(1400, 900)
         
         # 创建主容器
@@ -150,29 +460,194 @@ class AnalyXMainWindow(QMainWindow):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         
         # 添加自定义标题栏
-        self.title_bar = CustomTitleBar(self)
+        self.title_bar = ModernTitleBar(self)
         self.main_layout.addWidget(self.title_bar)
+        
+        # 创建菜单栏
+        self.menu_bar = ModernMenuBar(self)
+        self.main_layout.addWidget(self.menu_bar)
+        
+        # 创建工具栏
+        self.tool_bar = ModernToolBar(self)
+        self.main_layout.addWidget(self.tool_bar)
         
         # 创建内容区域
         self.content_widget = QWidget()
-        self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(2, 2, 2, 2)
+        self.content_layout = QHBoxLayout(self.content_widget)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(0)
         
-        # 创建菜单、工具栏、状态栏等
-        self.create_menu_bar()
-        self.create_tool_bar()
-        self.create_status_bar()
-        self.create_central_widget()
-        self.create_dock_widgets()
+        # 创建侧边栏
+        self.sidebar = QWidget()
+        self.sidebar.setFixedWidth(180)
+        self.sidebar_layout = QVBoxLayout(self.sidebar)
+        self.sidebar_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.content_layout.addWidget(self.menu_bar)
-        self.content_layout.addWidget(self.tool_bar)
-        self.content_layout.addWidget(self.central_widget)
-        self.content_layout.addWidget(self.status_bar)
+        # 侧边栏头部
+        sidebar_header = QWidget()
+        sidebar_header.setFixedHeight(40)
+        sidebar_header_layout = QVBoxLayout(sidebar_header)
+        sidebar_header_layout.setContentsMargins(15, 0, 15, 0)
+        sidebar_header_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
+        sidebar_title = QLabel('分析工具')
+        sidebar_title.setFont(QFont('Arial', 12, QFont.Weight.Bold))
+        sidebar_title.setStyleSheet('color: #6a9bcc;')
+        sidebar_header_layout.addWidget(sidebar_title)
+        
+        self.sidebar_layout.addWidget(sidebar_header)
+        
+        # 侧边栏导航
+        self.nav_list = QListWidget()
+        self.nav_list.addItems([
+            '描述统计',
+            't 检验',
+            '方差分析',
+            '相关分析',
+            '回归分析',
+            '信度分析',
+            '图表绘制'
+        ])
+        self.nav_list.setStyleSheet('''
+            QListWidget {
+                background-color: #222227;
+                color: #b0aea5;
+                border: none;
+                padding: 5px 0;
+            }
+            QListWidget::item {
+                padding: 8px 15px;
+                border-left: 2px solid transparent;
+                font-size: 11px;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(106, 155, 204, 0.1);
+                color: #6a9bcc;
+            }
+            QListWidget::item:selected {
+                background-color: rgba(106, 155, 204, 0.2);
+                color: #6a9bcc;
+                border-left: 2px solid #6a9bcc;
+            }
+        ''')
+        # 连接点击事件
+        self.nav_list.itemClicked.connect(self.on_nav_item_clicked)
+        self.sidebar_layout.addWidget(self.nav_list)
+        
+        # 侧边栏底部
+        sidebar_footer = QWidget()
+        sidebar_footer.setFixedHeight(50)
+        sidebar_footer_layout = QVBoxLayout(sidebar_footer)
+        sidebar_footer_layout.setContentsMargins(15, 0, 15, 0)
+        
+        version_label = QLabel('版本 1.0')
+        version_label.setStyleSheet('color: #777777; font-size: 10px;')
+        sidebar_footer_layout.addWidget(version_label, alignment=Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter)
+        
+        self.sidebar_layout.addWidget(sidebar_footer)
+        
+        # 创建主工作区
+        self.workspace = QWidget()
+        self.workspace_layout = QVBoxLayout(self.workspace)
+        self.workspace_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 创建标签页
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet('''
+            QTabWidget {
+                background-color: #1a1a20;
+                color: #faf9f5;
+            }
+            QTabBar {
+                background-color: #222227;
+                height: 48px;
+            }
+            QTabBar::tab {
+                background-color: #222227;
+                color: #b0aea5;
+                padding: 0 30px;
+                font-size: 13px;
+                font-weight: 500;
+                border-bottom: 3px solid transparent;
+            }
+            QTabBar::tab:hover {
+                background-color: #2a2a30;
+                color: #faf9f5;
+            }
+            QTabBar::tab:selected {
+                background-color: #1a1a20;
+                color: #6a9bcc;
+                border-bottom: 3px solid #6a9bcc;
+            }
+        ''')
+        
+        # 数据视图标签
+        self.data_table = QTableWidget()
+        self.data_table.setAlternatingRowColors(True)
+        self.data_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectItems)
+        # 使用自定义可编辑的表头
+        self.header_view = EditableHeaderView(Qt.Orientation.Horizontal, self)
+        self.data_table.setHorizontalHeader(self.header_view)
+        self.data_table.setStyleSheet('''
+            QTableWidget {
+                background-color: #1a1a20;
+                color: #faf9f5;
+                border: none;
+            }
+            QTableWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #2a2a30;
+            }
+            QTableWidget::item:selected {
+                background-color: rgba(106, 155, 204, 0.2);
+                color: #6a9bcc;
+            }
+            QHeaderView::section {
+                background-color: #222227;
+                color: #b0aea5;
+                padding: 10px;
+                border: none;
+                border-bottom: 1px solid #3a3a40;
+                font-size: 12px;
+                font-weight: 500;
+            }
+        ''')
+        # 连接单元格变化信号
+        self.data_table.cellChanged.connect(self.on_cell_changed)
+        self.tab_widget.addTab(self.data_table, '数据视图')
+        
+        # 分析结果标签
+        self.results_text = QTextEdit()
+        self.results_text.setReadOnly(True)
+        self.results_text.setFont(QFont('Consolas', 11))
+        self.results_text.setStyleSheet('''
+            QTextEdit {
+                background-color: #1a1a20;
+                color: #faf9f5;
+                border: none;
+                padding: 20px;
+            }
+        ''')
+        self.tab_widget.addTab(self.results_text, '分析结果')
+        
+        # 图表标签
+        self.chart_canvas = FigureCanvas(Figure(figsize=(10, 7)))
+        self.tab_widget.addTab(self.chart_canvas, '图表')
+        
+        self.workspace_layout.addWidget(self.tab_widget)
+        
+        # 添加到内容布局
+        self.content_layout.addWidget(self.sidebar)
+        self.content_layout.addWidget(self.workspace)
+        
+        # 创建状态栏
+        self.status_bar = ModernStatusBar(self)
+        
+        # 添加到主布局
         self.main_layout.addWidget(self.content_widget)
+        self.main_layout.addWidget(self.status_bar)
         
-        # 应用深色主题
+        # 应用主题
         self.apply_theme()
         
         # 加载示例数据
@@ -540,6 +1015,36 @@ class AnalyXMainWindow(QMainWindow):
                         self.df.iloc[row, col] = value
             except Exception as e:
                 pass
+    
+    def on_header_changed(self, col, new_name):
+        # 当表头内容改变时更新DataFrame的列名
+        if 0 <= col < len(self.df.columns):
+            old_name = self.df.columns[col]
+            if old_name != new_name:
+                # 重命名DataFrame的列
+                new_columns = list(self.df.columns)
+                new_columns[col] = new_name
+                self.df.columns = new_columns
+    
+    def on_nav_item_clicked(self, item):
+        # 处理侧边栏点击事件
+        text = item.text()
+        if text == '描述统计':
+            self.show_descriptive_stats()
+        elif text == 't 检验':
+            # 显示t检验子菜单或默认打开单样本t检验
+            self.show_ttest_one_sample()
+        elif text == '方差分析':
+            self.show_anova()
+        elif text == '相关分析':
+            self.show_correlation()
+        elif text == '回归分析':
+            self.show_regression()
+        elif text == '信度分析':
+            self.show_reliability()
+        elif text == '图表绘制':
+            # 显示图表子菜单或默认打开直方图
+            self.show_histogram()
 
     def new_project(self):
         reply = QMessageBox.question(
@@ -548,20 +1053,16 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            # 创建空的DataFrame，包含默认列
-            self.df = pd.DataFrame({
-                '变量1': pd.Series(dtype='float64'),
-                '变量2': pd.Series(dtype='float64'),
-                '变量3': pd.Series(dtype='float64'),
-                '变量4': pd.Series(dtype='float64'),
-                '变量5': pd.Series(dtype='float64')
-            })
+            # 创建空的DataFrame，包含100列
+            columns = [f'变量{i}' for i in range(1, 101)]
+            data = {col: pd.Series(dtype='float64') for col in columns}
+            self.df = pd.DataFrame(data)
             # 添加100行空数据
             self.df = self.df.reindex(range(100))
             self.current_file = None
             self.update_data_table()
             self.results_text.clear()
-            self.status_label.setText('新项目已创建')
+            self.status_bar.status_label.setText('新项目已创建')
 
     def open_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -587,7 +1088,7 @@ class AnalyXMainWindow(QMainWindow):
             
             self.current_file = file_path
             self.update_data_table()
-            self.status_label.setText(f'已加载: {os.path.basename(file_path)}')
+            self.status_bar.status_label.setText(f'已加载: {os.path.basename(file_path)}')
         except Exception as e:
             QMessageBox.critical(self, '错误', f'加载文件失败: {str(e)}')
 
@@ -636,7 +1137,7 @@ class AnalyXMainWindow(QMainWindow):
                 self.df.to_excel(file_path, index=False)
             else:
                 self.df.to_csv(file_path, index=False)
-            self.status_label.setText(f'已保存: {os.path.basename(file_path)}')
+            self.status_bar.status_label.setText(f'已保存: {os.path.basename(file_path)}')
         except Exception as e:
             QMessageBox.critical(self, '错误', f'保存文件失败: {str(e)}')
 
@@ -712,7 +1213,7 @@ class AnalyXMainWindow(QMainWindow):
                     background-color: #e0e0e0;
                 }
             ''')
-        self.status_label.setText('已切换主题')
+        self.status_bar.status_label.setText('已切换主题')
 
     def show_about(self):
         QMessageBox.about(
