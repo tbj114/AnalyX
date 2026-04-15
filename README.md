@@ -1,8 +1,8 @@
-# ByteStats - 字节跳动学术统计软件
+# AnalyX - 学术统计软件
 
 ## 产品介绍
 
-ByteStats 是一款由字节跳动桌面端软件开发团队打造的专业学术科研统计软件，具有以下特点：
+AnalyX 是一款专业学术科研统计软件，具有以下特点：
 
 - **桌面离线软件**：本地运行，数据安全
 - **字节风格 GUI**：基于 PyQt6，现代简洁的用户界面
@@ -132,7 +132,7 @@ python build.py
 ## 项目结构
 
 ```
-bytestats-python/
+AnalyX/
 ├── src/
 │   └── main.py              # 主程序入口
 ├── data/                     # 示例数据
@@ -169,7 +169,7 @@ MIT License - 详见 LICENSE.txt 文件
 
 ## 版权
 
-© 2024 ByteDance. All rights reserved.
+© 2024 AnalyX. All rights reserved.
 
 ## 联系方式
 
