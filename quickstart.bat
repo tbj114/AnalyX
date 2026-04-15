@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ========================================
-echo   ByteStats - 快速启动脚本 (Windows)
+echo   AnalyX - 快速启动脚本 (Windows)
 echo ========================================
 echo.
 
@@ -27,7 +27,7 @@ if errorlevel 1 (
 echo ✅ 依赖包安装完成
 echo.
 
-echo 3. 启动 ByteStats...
+echo 3. 启动 AnalyX...
 echo.
 python src\main.py
 

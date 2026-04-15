@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "========================================"
-echo "  ByteStats - 快速启动脚本"
+echo "  AnalyX - 快速启动脚本"
 echo "========================================"
 echo ""
 
@@ -24,6 +24,6 @@ fi
 echo "✅ 依赖包安装完成"
 echo ""
 
-echo "3. 启动 ByteStats..."
+echo "3. 启动 AnalyX..."
 echo ""
 python3 src/main.py
