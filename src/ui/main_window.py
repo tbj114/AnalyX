@@ -17,10 +17,11 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QListWidget,
     QTextEdit, QFileDialog, QMessageBox, QDialog, QComboBox,
     QDoubleSpinBox, QPushButton, QLabel, QTabWidget,
-    QHeaderView, QCheckBox, QGridLayout, QSpacerItem, QSizePolicy
+    QHeaderView, QCheckBox, QGridLayout, QSpacerItem, QSizePolicy, QStackedWidget
 )
-from PyQt6.QtCore import Qt, QTimer, QPoint
-from PyQt6.QtGui import QFont, QPalette, QColor, QLinearGradient, QBrush, QPainter, QPen, QIcon
+from PyQt6.QtCore import Qt, QTimer, QPoint, QSize
+from PyQt6.QtGui import QFont, QPalette, QColor, QCursor
+
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
@@ -38,164 +39,194 @@ class AnalyXMainWindow(QMainWindow):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.df = pd.DataFrame()
         self.current_file = None
-        self.dark_theme = False  # Changed to light theme by default
+        self.dark_theme = False
         self.init_ui()
     
     def init_ui(self):
-        self.setWindowTitle('AnalyX - 学术统计软件')
+        self.setWindowTitle('AnalyX - 专业统计分析平台')
         self.setMinimumSize(1400, 900)
         
         self.main_widget = QWidget()
         self.setCentralWidget(self.main_widget)
         self.main_layout = QVBoxLayout(self.main_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Create a gradient background widget
-        self.background_widget = QWidget()
-        self.background_layout = QVBoxLayout(self.background_widget)
-        self.background_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
         
         self.title_bar = ModernTitleBar(self)
-        self.background_layout.addWidget(self.title_bar)
+        self.main_layout.addWidget(self.title_bar)
         
         self.menu_bar = ModernMenuBar(self)
-        self.background_layout.addWidget(self.menu_bar)
+        self.main_layout.addWidget(self.menu_bar)
         
         self.tool_bar = ModernToolBar(self)
-        self.background_layout.addWidget(self.tool_bar)
+        self.main_layout.addWidget(self.tool_bar)
         
-        self.content_widget = QWidget()
-        self.content_layout = QHBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(20, 20, 20, 20)
-        self.content_layout.setSpacing(20)
+        self.content_area = QWidget()
+        self.content_area.setStyleSheet('background-color: #f1f5f9;')
+        content_layout = QHBoxLayout(self.content_area)
+        content_layout.setContentsMargins(24, 24, 24, 24)
+        content_layout.setSpacing(24)
         
-        # Sidebar with artistic design
-        self.sidebar = QWidget()
-        self.sidebar.setFixedWidth(200)
-        self.sidebar_layout = QVBoxLayout(self.sidebar)
-        self.sidebar_layout.setContentsMargins(0, 0, 0, 0)
-        self.sidebar_layout.setSpacing(0)
+        self.sidebar = self.create_sidebar()
+        content_layout.addWidget(self.sidebar)
         
-        # Sidebar header with gradient
-        sidebar_header = QWidget()
-        sidebar_header.setFixedHeight(60)
-        sidebar_header.setStyleSheet('''
+        self.workspace = self.create_workspace()
+        content_layout.addWidget(self.workspace, 1)
+        
+        self.main_layout.addWidget(self.content_area)
+        
+        self.status_bar = ModernStatusBar(self)
+        self.main_layout.addWidget(self.status_bar)
+        
+        self.apply_theme()
+        self.load_sample_data()
+    
+    def create_sidebar(self):
+        sidebar = QWidget()
+        sidebar.setFixedWidth(260)
+        sidebar.setStyleSheet('''
             QWidget {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6a9bcc, stop:1 #788c5d);
-                border-radius: 8px 8px 0 0;
+                background-color: #ffffff;
+                border-radius: 16px;
             }
         ''')
-        sidebar_header_layout = QVBoxLayout(sidebar_header)
-        sidebar_header_layout.setContentsMargins(20, 0, 20, 0)
         
-        sidebar_title = QLabel('分析工具')
-        sidebar_title.setFont(QFont('Poppins', 14, QFont.Weight.Bold))
-        sidebar_title.setStyleSheet('color: #faf9f5;')
-        sidebar_header_layout.addWidget(sidebar_title, alignment=Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
         
-        self.sidebar_layout.addWidget(sidebar_header)
+        sidebar_header = QWidget()
+        sidebar_header.setFixedHeight(72)
+        sidebar_header.setStyleSheet('''
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6366f1, stop:1 #8b5cf6);
+                border-radius: 16px 16px 0 0;
+            }
+        ''')
         
-        # Navigation list with modern styling
+        header_layout = QVBoxLayout(sidebar_header)
+        header_layout.setContentsMargins(24, 0, 24, 0)
+        
+        header_title = QLabel('分析工具')
+        header_title.setFont(QFont('Inter', 16, QFont.Weight.Bold))
+        header_title.setStyleSheet('color: white;')
+        
+        header_subtitle = QLabel('选择分析类型')
+        header_subtitle.setFont(QFont('Inter', 11))
+        header_subtitle.setStyleSheet('color: rgba(255, 255, 255, 0.8);')
+        
+        header_layout.addWidget(header_title)
+        header_layout.addWidget(header_subtitle)
+        
+        sidebar_layout.addWidget(sidebar_header)
+        
         self.nav_list = QListWidget()
-        self.nav_list.addItems([
-            '描述统计',
-            't 检验',
-            '方差分析',
-            '相关分析',
-            '回归分析',
-            '信度分析',
-            '图表绘制'
-        ])
+        nav_items = [
+            ('📊', '描述统计'),
+            ('📈', 't 检验'),
+            ('📉', '方差分析'),
+            ('🔗', '相关分析'),
+            ('📐', '回归分析'),
+            ('✅', '信度分析'),
+            ('🎨', '图表绘制')
+        ]
+        
+        for icon, text in nav_items:
+            self.nav_list.addItem(f'{icon}  {text}')
+        
         self.nav_list.setStyleSheet('''
             QListWidget {
-                background-color: #faf9f5;
-                color: #141413;
+                background-color: transparent;
+                color: #475569;
                 border: none;
-                padding: 10px 0;
-                border-radius: 0 0 8px 8px;
+                padding: 12px 8px;
+                font-family: Inter;
+                font-size: 12px;
             }
             QListWidget::item {
-                padding: 12px 20px;
-                border-left: 3px solid transparent;
-                font-size: 12px;
-                font-family: 'Lora';
+                padding: 14px 16px;
+                border-radius: 10px;
+                margin: 2px 8px;
+                font-weight: 500;
             }
             QListWidget::item:hover {
-                background-color: rgba(106, 155, 204, 0.1);
-                color: #6a9bcc;
+                background-color: #f1f5f9;
+                color: #1e293b;
             }
             QListWidget::item:selected {
-                background-color: rgba(106, 155, 204, 0.2);
-                color: #6a9bcc;
-                border-left: 3px solid #6a9bcc;
+                background-color: #6366f1;
+                color: white;
             }
         ''')
         self.nav_list.itemClicked.connect(self.on_nav_item_clicked)
-        self.sidebar_layout.addWidget(self.nav_list)
+        sidebar_layout.addWidget(self.nav_list, 1)
         
-        # Sidebar footer
         sidebar_footer = QWidget()
-        sidebar_footer.setFixedHeight(60)
+        sidebar_footer.setFixedHeight(72)
         sidebar_footer.setStyleSheet('''
             QWidget {
-                background-color: #faf9f5;
-                border-radius: 0 0 8px 8px;
+                background-color: #f8fafc;
+                border-radius: 0 0 16px 16px;
+                border-top: 1px solid #e2e8f0;
             }
         ''')
-        sidebar_footer_layout = QVBoxLayout(sidebar_footer)
-        sidebar_footer_layout.setContentsMargins(20, 0, 20, 0)
         
-        version_label = QLabel('版本 1.0')
-        version_label.setStyleSheet('color: #777777; font-size: 10px; font-family: Lora;')
-        sidebar_footer_layout.addWidget(version_label, alignment=Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter)
+        footer_layout = QVBoxLayout(sidebar_footer)
+        footer_layout.setContentsMargins(24, 0, 24, 0)
         
-        self.sidebar_layout.addWidget(sidebar_footer)
+        version_label = QLabel('AnalyX v1.0')
+        version_label.setFont(QFont('Inter', 11, QFont.Weight.Medium))
+        version_label.setStyleSheet('color: #64748b;')
         
-        # Workspace with card-like design
-        self.workspace = QWidget()
-        self.workspace.setStyleSheet('''
+        footer_layout.addWidget(version_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        sidebar_layout.addWidget(sidebar_footer)
+        
+        return sidebar
+    
+    def create_workspace(self):
+        workspace = QWidget()
+        workspace.setStyleSheet('''
             QWidget {
-                background-color: #faf9f5;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                background-color: #ffffff;
+                border-radius: 16px;
             }
         ''')
-        self.workspace_layout = QVBoxLayout(self.workspace)
-        self.workspace_layout.setContentsMargins(20, 20, 20, 20)
-        self.workspace_layout.setSpacing(15)
         
-        # Tab widget with modern styling
+        workspace_layout = QVBoxLayout(workspace)
+        workspace_layout.setContentsMargins(24, 24, 24, 24)
+        workspace_layout.setSpacing(20)
+        
         self.tab_widget = QTabWidget()
         self.tab_widget.setStyleSheet('''
             QTabWidget {
                 background-color: transparent;
-                color: #141413;
+                color: #1e293b;
+                font-family: Inter;
             }
             QTabBar {
                 background-color: transparent;
-                height: 50px;
-                padding-left: 10px;
+                height: 48px;
+                padding-left: 0;
             }
             QTabBar::tab {
                 background-color: transparent;
-                color: #b0aea5;
-                padding: 0 30px;
-                font-size: 13px;
-                font-weight: 500;
-                font-family: Poppins;
+                color: #94a3b8;
+                padding: 0 28px;
+                font-size: 12px;
+                font-weight: 600;
                 border-bottom: 3px solid transparent;
-                margin-right: 10px;
+                margin-right: 4px;
             }
             QTabBar::tab:hover {
-                color: #6a9bcc;
+                color: #64748b;
             }
             QTabBar::tab:selected {
-                color: #6a9bcc;
-                border-bottom: 3px solid #6a9bcc;
+                color: #6366f1;
+                border-bottom: 3px solid #6366f1;
             }
         ''')
         
-        # Data table with modern styling
         self.data_table = QTableWidget()
         self.data_table.setAlternatingRowColors(True)
         self.data_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectItems)
@@ -203,325 +234,114 @@ class AnalyXMainWindow(QMainWindow):
         self.data_table.setHorizontalHeader(self.header_view)
         self.data_table.setStyleSheet('''
             QTableWidget {
-                background-color: white;
-                color: #141413;
-                border: 1px solid #e8e6dc;
-                border-radius: 6px;
-                gridline-color: #e8e6dc;
+                background-color: #ffffff;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                gridline-color: #f1f5f9;
+                font-family: Inter;
+                font-size: 12px;
             }
             QTableWidget::item {
-                padding: 10px;
-                border-bottom: 1px solid #e8e6dc;
-                font-family: Lora;
+                padding: 12px 16px;
+                border-bottom: 1px solid #f1f5f9;
             }
             QTableWidget::item:selected {
-                background-color: rgba(106, 155, 204, 0.1);
-                color: #6a9bcc;
+                background-color: #6366f120;
+                color: #6366f1;
             }
             QHeaderView::section {
-                background-color: #f8f7f3;
-                color: #141413;
-                padding: 12px;
+                background-color: #f8fafc;
+                color: #475569;
+                padding: 14px 16px;
                 border: none;
-                border-bottom: 1px solid #e8e6dc;
+                border-bottom: 2px solid #e2e8f0;
                 font-size: 12px;
-                font-weight: 500;
-                font-family: Poppins;
+                font-weight: 600;
+                font-family: Inter;
             }
             QHeaderView::section:horizontal {
-                border-right: 1px solid #e8e6dc;
+                border-right: 1px solid #f1f5f9;
             }
         ''')
         self.data_table.cellChanged.connect(self.on_cell_changed)
-        self.tab_widget.addTab(self.data_table, '数据视图')
+        self.tab_widget.addTab(self.data_table, '📋  数据视图')
         
-        # Results text with modern styling
         self.results_text = QTextEdit()
         self.results_text.setReadOnly(True)
-        self.results_text.setFont(QFont('Consolas', 11))
+        self.results_text.setFont(QFont('Inter', 11))
         self.results_text.setStyleSheet('''
             QTextEdit {
-                background-color: white;
-                color: #141413;
-                border: 1px solid #e8e6dc;
-                border-radius: 6px;
-                padding: 20px;
-                font-family: Lora;
+                background-color: #ffffff;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                padding: 24px;
+                font-family: Inter;
+                font-size: 12px;
             }
         ''')
-        self.tab_widget.addTab(self.results_text, '分析结果')
+        self.tab_widget.addTab(self.results_text, '📊  分析结果')
         
-        # Chart canvas with modern styling
         self.chart_canvas = FigureCanvas(Figure(figsize=(10, 7)))
         chart_container = QWidget()
         chart_container.setStyleSheet('''
             QWidget {
-                background-color: white;
-                border: 1px solid #e8e6dc;
-                border-radius: 6px;
+                background-color: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
             }
         ''')
         chart_layout = QVBoxLayout(chart_container)
-        chart_layout.setContentsMargins(10, 10, 10, 10)
+        chart_layout.setContentsMargins(16, 16, 16, 16)
         chart_layout.addWidget(self.chart_canvas)
-        self.tab_widget.addTab(chart_container, '图表')
+        self.tab_widget.addTab(chart_container, '🎨  图表')
         
-        self.workspace_layout.addWidget(self.tab_widget)
+        workspace_layout.addWidget(self.tab_widget)
         
-        self.content_layout.addWidget(self.sidebar)
-        self.content_layout.addWidget(self.workspace)
-        
-        self.status_bar = ModernStatusBar(self)
-        
-        self.background_layout.addWidget(self.content_widget)
-        self.background_layout.addWidget(self.status_bar)
-        
-        self.main_layout.addWidget(self.background_widget)
-        
-        self.apply_theme()
-        self.load_sample_data()
+        return workspace
     
     def apply_theme(self):
         if self.dark_theme:
-            # Dark theme
             palette = QPalette()
-            palette.setColor(QPalette.ColorRole.Window, QColor(30, 30, 35))
-            palette.setColor(QPalette.ColorRole.WindowText, QColor(220, 220, 220))
-            palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 30))
-            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(40, 40, 45))
-            palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(50, 50, 55))
-            palette.setColor(QPalette.ColorRole.ToolTipText, QColor(220, 220, 220))
-            palette.setColor(QPalette.ColorRole.Text, QColor(220, 220, 220))
-            palette.setColor(QPalette.ColorRole.Button, QColor(45, 45, 50))
-            palette.setColor(QPalette.ColorRole.ButtonText, QColor(220, 220, 220))
-            palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 70, 70))
-            palette.setColor(QPalette.ColorRole.Link, QColor(70, 140, 255))
-            palette.setColor(QPalette.ColorRole.Highlight, QColor(70, 140, 255))
-            palette.setColor(QPalette.ColorRole.HighlightedText, QColor(20, 20, 25))
+            palette.setColor(QPalette.ColorRole.Window, QColor(15, 23, 42))
+            palette.setColor(QPalette.ColorRole.WindowText, QColor(226, 232, 240))
+            palette.setColor(QPalette.ColorRole.Base, QColor(30, 41, 59))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(51, 65, 85))
+            palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(51, 65, 85))
+            palette.setColor(QPalette.ColorRole.ToolTipText, QColor(226, 232, 240))
+            palette.setColor(QPalette.ColorRole.Text, QColor(226, 232, 240))
+            palette.setColor(QPalette.ColorRole.Button, QColor(51, 65, 85))
+            palette.setColor(QPalette.ColorRole.ButtonText, QColor(226, 232, 240))
+            palette.setColor(QPalette.ColorRole.BrightText, QColor(239, 68, 68))
+            palette.setColor(QPalette.ColorRole.Link, QColor(99, 102, 241))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor(99, 102, 241))
+            palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
             QApplication.setPalette(palette)
             plt.style.use('seaborn-v0_8-dark')
-            
-            # Update styles for dark theme
-            self.background_widget.setStyleSheet('''
-                QWidget {
-                    background-color: #1a1a1a;
-                }
-            ''')
-            
-            self.sidebar.setStyleSheet('''
-                QWidget {
-                    background-color: #222227;
-                    border-radius: 8px;
-                }
-            ''')
-            
-            self.nav_list.setStyleSheet('''
-                QListWidget {
-                    background-color: #222227;
-                    color: #b0aea5;
-                    border: none;
-                    padding: 10px 0;
-                    border-radius: 0 0 8px 8px;
-                }
-                QListWidget::item {
-                    padding: 12px 20px;
-                    border-left: 3px solid transparent;
-                    font-size: 12px;
-                    font-family: 'Lora';
-                }
-                QListWidget::item:hover {
-                    background-color: rgba(106, 155, 204, 0.1);
-                    color: #6a9bcc;
-                }
-                QListWidget::item:selected {
-                    background-color: rgba(106, 155, 204, 0.2);
-                    color: #6a9bcc;
-                    border-left: 3px solid #6a9bcc;
-                }
-            ''')
-            
-            self.workspace.setStyleSheet('''
-                QWidget {
-                    background-color: #222227;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-                }
-            ''')
-            
-            self.data_table.setStyleSheet('''
-                QTableWidget {
-                    background-color: #1a1a20;
-                    color: #faf9f5;
-                    border: 1px solid #333333;
-                    border-radius: 6px;
-                    gridline-color: #333333;
-                }
-                QTableWidget::item {
-                    padding: 10px;
-                    border-bottom: 1px solid #333333;
-                    font-family: Lora;
-                }
-                QTableWidget::item:selected {
-                    background-color: rgba(106, 155, 204, 0.2);
-                    color: #6a9bcc;
-                }
-                QHeaderView::section {
-                    background-color: #222227;
-                    color: #b0aea5;
-                    padding: 12px;
-                    border: none;
-                    border-bottom: 1px solid #333333;
-                    font-size: 12px;
-                    font-weight: 500;
-                    font-family: Poppins;
-                }
-                QHeaderView::section:horizontal {
-                    border-right: 1px solid #333333;
-                }
-            ''')
-            
-            self.results_text.setStyleSheet('''
-                QTextEdit {
-                    background-color: #1a1a20;
-                    color: #faf9f5;
-                    border: 1px solid #333333;
-                    border-radius: 6px;
-                    padding: 20px;
-                    font-family: Lora;
-                }
-            ''')
-            
-            if self.tab_widget.count() > 2:
-                chart_container = self.tab_widget.widget(2)
-                chart_container.setStyleSheet('''
-                    QWidget {
-                        background-color: #1a1a20;
-                        border: 1px solid #333333;
-                        border-radius: 6px;
-                    }
-                ''')
         else:
-            # Light theme
             palette = QPalette()
-            palette.setColor(QPalette.ColorRole.Window, QColor(250, 249, 245))
-            palette.setColor(QPalette.ColorRole.WindowText, QColor(20, 20, 19))
+            palette.setColor(QPalette.ColorRole.Window, QColor(248, 250, 252))
+            palette.setColor(QPalette.ColorRole.WindowText, QColor(30, 41, 59))
             palette.setColor(QPalette.ColorRole.Base, QColor(255, 255, 255))
-            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(248, 247, 243))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(248, 250, 252))
             palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 255))
-            palette.setColor(QPalette.ColorRole.ToolTipText, QColor(20, 20, 19))
-            palette.setColor(QPalette.ColorRole.Text, QColor(20, 20, 19))
-            palette.setColor(QPalette.ColorRole.Button, QColor(240, 238, 232))
-            palette.setColor(QPalette.ColorRole.ButtonText, QColor(20, 20, 19))
-            palette.setColor(QPalette.ColorRole.BrightText, QColor(217, 119, 87))
-            palette.setColor(QPalette.ColorRole.Link, QColor(106, 155, 204))
-            palette.setColor(QPalette.ColorRole.Highlight, QColor(106, 155, 204))
+            palette.setColor(QPalette.ColorRole.ToolTipText, QColor(30, 41, 59))
+            palette.setColor(QPalette.ColorRole.Text, QColor(30, 41, 59))
+            palette.setColor(QPalette.ColorRole.Button, QColor(241, 245, 249))
+            palette.setColor(QPalette.ColorRole.ButtonText, QColor(30, 41, 59))
+            palette.setColor(QPalette.ColorRole.BrightText, QColor(239, 68, 68))
+            palette.setColor(QPalette.ColorRole.Link, QColor(99, 102, 241))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor(99, 102, 241))
             palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
             QApplication.setPalette(palette)
             plt.style.use('seaborn-v0_8-whitegrid')
-            
-            # Update styles for light theme
-            self.background_widget.setStyleSheet('''
-                QWidget {
-                    background-color: #faf9f5;
-                }
-            ''')
-            
-            self.sidebar.setStyleSheet('''
-                QWidget {
-                    background-color: #faf9f5;
-                    border-radius: 8px;
-                }
-            ''')
-            
-            self.nav_list.setStyleSheet('''
-                QListWidget {
-                    background-color: #faf9f5;
-                    color: #141413;
-                    border: none;
-                    padding: 10px 0;
-                    border-radius: 0 0 8px 8px;
-                }
-                QListWidget::item {
-                    padding: 12px 20px;
-                    border-left: 3px solid transparent;
-                    font-size: 12px;
-                    font-family: 'Lora';
-                }
-                QListWidget::item:hover {
-                    background-color: rgba(106, 155, 204, 0.1);
-                    color: #6a9bcc;
-                }
-                QListWidget::item:selected {
-                    background-color: rgba(106, 155, 204, 0.2);
-                    color: #6a9bcc;
-                    border-left: 3px solid #6a9bcc;
-                }
-            ''')
-            
-            self.workspace.setStyleSheet('''
-                QWidget {
-                    background-color: #faf9f5;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-                }
-            ''')
-            
-            self.data_table.setStyleSheet('''
-                QTableWidget {
-                    background-color: white;
-                    color: #141413;
-                    border: 1px solid #e8e6dc;
-                    border-radius: 6px;
-                    gridline-color: #e8e6dc;
-                }
-                QTableWidget::item {
-                    padding: 10px;
-                    border-bottom: 1px solid #e8e6dc;
-                    font-family: Lora;
-                }
-                QTableWidget::item:selected {
-                    background-color: rgba(106, 155, 204, 0.1);
-                    color: #6a9bcc;
-                }
-                QHeaderView::section {
-                    background-color: #f8f7f3;
-                    color: #141413;
-                    padding: 12px;
-                    border: none;
-                    border-bottom: 1px solid #e8e6dc;
-                    font-size: 12px;
-                    font-weight: 500;
-                    font-family: Poppins;
-                }
-                QHeaderView::section:horizontal {
-                    border-right: 1px solid #e8e6dc;
-                }
-            ''')
-            
-            self.results_text.setStyleSheet('''
-                QTextEdit {
-                    background-color: white;
-                    color: #141413;
-                    border: 1px solid #e8e6dc;
-                    border-radius: 6px;
-                    padding: 20px;
-                    font-family: Lora;
-                }
-            ''')
-            
-            if self.tab_widget.count() > 2:
-                chart_container = self.tab_widget.widget(2)
-                chart_container.setStyleSheet('''
-                    QWidget {
-                        background-color: white;
-                        border: 1px solid #e8e6dc;
-                        border-radius: 6px;
-                    }
-                ''')
     
     def load_sample_data(self):
         self.df = DataHandler.load_sample_data()
         self.update_data_table()
+        if not self.df.empty:
+            self.status_bar.data_info_label.setText(f'{len(self.df)} 行 × {len(self.df.columns)} 列')
     
     def update_data_table(self):
         self.data_table.setRowCount(len(self.df))
@@ -562,19 +382,19 @@ class AnalyXMainWindow(QMainWindow):
     
     def on_nav_item_clicked(self, item):
         text = item.text()
-        if text == '描述统计':
+        if '描述统计' in text:
             self.show_descriptive_stats()
-        elif text == 't 检验':
+        elif 't 检验' in text:
             self.show_ttest_one_sample()
-        elif text == '方差分析':
+        elif '方差分析' in text:
             self.show_anova()
-        elif text == '相关分析':
+        elif '相关分析' in text:
             self.show_correlation()
-        elif text == '回归分析':
+        elif '回归分析' in text:
             self.show_regression()
-        elif text == '信度分析':
+        elif '信度分析' in text:
             self.show_reliability()
-        elif text == '图表绘制':
+        elif '图表绘制' in text:
             self.show_histogram()
     
     def new_project(self):
@@ -604,6 +424,7 @@ class AnalyXMainWindow(QMainWindow):
             self.current_file = file_path
             self.update_data_table()
             self.status_bar.status_label.setText(f'已加载: {os.path.basename(file_path)}')
+            self.status_bar.data_info_label.setText(f'{len(self.df)} 行 × {len(self.df.columns)} 列')
         except Exception as e:
             QMessageBox.critical(self, '错误', f'加载文件失败: {str(e)}')
     
@@ -662,21 +483,17 @@ class AnalyXMainWindow(QMainWindow):
     
     def toggle_theme(self):
         self.dark_theme = not self.dark_theme
-        if self.dark_theme:
-            self.apply_theme()
-        else:
-            QApplication.setPalette(QApplication.style().standardPalette())
-            plt.style.use('seaborn-v0_8-whitegrid')
+        self.apply_theme()
         self.status_bar.status_label.setText('已切换主题')
     
     def show_about(self):
         QMessageBox.about(
             self, '关于 AnalyX',
-            '<h2>AnalyX 1.0</h2>'
-            '<p>学术统计分析软件</p>'
+            '<h2 style="color: #6366f1;">AnalyX 1.0</h2>'
+            '<p>专业统计分析平台</p>'
             '<p>功能全面超越 SPSS，速度更快</p>'
             '<p>支持：描述统计、t 检验、ANOVA、相关、回归、信度分析等</p>'
-            '<p>© 2024 AnalyX. All rights reserved.</p>'
+            '<p style="color: #64748b;">© 2024 AnalyX. All rights reserved.</p>'
         )
     
     def show_descriptive_stats(self):
@@ -689,91 +506,71 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.warning(self, '警告', '没有数值型数据')
             return
         
-        dialog = QDialog(self)
-        dialog.setWindowTitle('描述统计')
-        dialog.resize(500, 400)
+        dialog = self.create_modern_dialog('描述统计', 560, 500)
+        main_layout = dialog.layout()
         
-        main_layout = QVBoxLayout(dialog)
-        
-        var_group = QWidget()
-        var_layout = QVBoxLayout(var_group)
-        var_layout.addWidget(QLabel('选择变量 (可多选):'))
-        
+        var_group = self.create_form_section('选择变量 (可多选):')
         var_list = QListWidget()
         var_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
         var_list.addItems(numeric_cols)
         if numeric_cols:
             var_list.setCurrentRow(0)
-        var_layout.addWidget(var_list)
+        var_list.setStyleSheet('''
+            QListWidget {
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 8px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+            QListWidget::item {
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin: 2px 0;
+            }
+            QListWidget::item:selected {
+                background-color: #6366f1;
+                color: white;
+            }
+        ''')
+        var_group.layout().addWidget(var_list)
         main_layout.addWidget(var_group)
         
-        stats_group = QWidget()
-        stats_layout = QVBoxLayout(stats_group)
-        stats_layout.addWidget(QLabel('选择统计量:'))
-        
+        stats_group = self.create_form_section('选择统计量:')
         stats_grid = QWidget()
         grid_layout = QGridLayout(stats_grid)
+        grid_layout.setSpacing(12)
         
-        mean_check = QCheckBox('均值')
-        mean_check.setChecked(True)
-        median_check = QCheckBox('中位数')
-        median_check.setChecked(True)
-        std_check = QCheckBox('标准差')
-        std_check.setChecked(True)
-        var_check = QCheckBox('方差')
-        var_check.setChecked(True)
-        min_check = QCheckBox('最小值')
-        min_check.setChecked(True)
-        max_check = QCheckBox('最大值')
-        max_check.setChecked(True)
-        range_check = QCheckBox('全距')
-        range_check.setChecked(True)
-        skew_check = QCheckBox('偏度')
-        skew_check.setChecked(True)
-        kurtosis_check = QCheckBox('峰度')
-        kurtosis_check.setChecked(True)
-        percentiles_check = QCheckBox('百分位数')
-        percentiles_check.setChecked(False)
+        checks = [
+            ('均值', True), ('中位数', True), ('标准差', True),
+            ('方差', True), ('最小值', True), ('最大值', True),
+            ('全距', True), ('偏度', True), ('峰度', True),
+            ('百分位数', False)
+        ]
+        check_widgets = {}
+        for i, (text, checked) in enumerate(checks):
+            check = QCheckBox(text)
+            check.setChecked(checked)
+            check.setFont(QFont('Inter', 11))
+            check.setStyleSheet('color: #475569;')
+            check_widgets[text] = check
+            grid_layout.addWidget(check, i // 2, i % 2)
         
-        grid_layout.addWidget(mean_check, 0, 0)
-        grid_layout.addWidget(median_check, 0, 1)
-        grid_layout.addWidget(std_check, 1, 0)
-        grid_layout.addWidget(var_check, 1, 1)
-        grid_layout.addWidget(min_check, 2, 0)
-        grid_layout.addWidget(max_check, 2, 1)
-        grid_layout.addWidget(range_check, 3, 0)
-        grid_layout.addWidget(skew_check, 3, 1)
-        grid_layout.addWidget(kurtosis_check, 4, 0)
-        grid_layout.addWidget(percentiles_check, 4, 1)
-        
-        stats_layout.addWidget(stats_grid)
+        stats_group.layout().addWidget(stats_grid)
         main_layout.addWidget(stats_group)
         
-        ci_group = QWidget()
-        ci_layout = QHBoxLayout(ci_group)
         ci_check = QCheckBox('计算95%置信区间')
-        ci_check.setChecked(False)
-        ci_layout.addWidget(ci_check)
-        main_layout.addWidget(ci_group)
+        ci_check.setFont(QFont('Inter', 11))
+        ci_check.setStyleSheet('color: #475569;')
+        main_layout.addWidget(ci_check)
         
-        chart_group = QWidget()
-        chart_layout = QHBoxLayout(chart_group)
         chart_check = QCheckBox('生成直方图')
-        chart_check.setChecked(False)
-        chart_layout.addWidget(chart_check)
-        main_layout.addWidget(chart_group)
+        chart_check.setFont(QFont('Inter', 11))
+        chart_check.setStyleSheet('color: #475569;')
+        main_layout.addWidget(chart_check)
         
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        cancel_btn = QPushButton('取消')
-        cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(cancel_btn)
-        
-        calculate_btn = QPushButton('计算')
-        calculate_btn.setDefault(True)
-        btn_layout.addWidget(calculate_btn)
-        
+        btn_layout = self.create_button_layout(dialog)
         main_layout.addLayout(btn_layout)
         
         def calculate():
@@ -782,62 +579,138 @@ class AnalyXMainWindow(QMainWindow):
                 QMessageBox.warning(self, '警告', '请至少选择一个变量')
                 return
             
-            result_html = '<h2>描述统计结果</h2>'
+            result_html = '<h2 style="color: #1e293b; margin-bottom: 20px;">描述统计结果</h2>'
             
             for col in selected_items:
                 data = self.df[col].dropna()
                 desc = stats.describe(data)
                 
-                result_html += f'<h3>{col}</h3>'
-                result_html += '''<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-                <tr><td><b>样本数</b></td><td>{desc.nobs}</td></tr>'''.format(desc=desc)
+                result_html += f'<h3 style="color: #6366f1; margin-top: 24px; margin-bottom: 12px;">{col}</h3>'
+                result_html += '<table style="border-collapse: collapse; width: 100%; margin-bottom: 16px;">'
+                result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">样本数</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{desc.nobs}</td></tr>'
                 
-                if mean_check.isChecked():
-                    result_html += f'<tr><td><b>均值</b></td><td>{desc.mean:.4f}</td></tr>'
-                if median_check.isChecked():
-                    result_html += f'<tr><td><b>中位数</b></td><td>{np.median(data):.4f}</td></tr>'
-                if std_check.isChecked():
-                    result_html += f'<tr><td><b>标准差</b></td><td>{np.std(data, ddof=1):.4f}</td></tr>'
-                if var_check.isChecked():
-                    result_html += f'<tr><td><b>方差</b></td><td>{desc.variance:.4f}</td></tr>'
-                if min_check.isChecked():
-                    result_html += f'<tr><td><b>最小值</b></td><td>{desc.minmax[0]:.4f}</td></tr>'
-                if max_check.isChecked():
-                    result_html += f'<tr><td><b>最大值</b></td><td>{desc.minmax[1]:.4f}</td></tr>'
-                if range_check.isChecked():
-                    result_html += f'<tr><td><b>全距</b></td><td>{desc.minmax[1] - desc.minmax[0]:.4f}</td></tr>'
-                if skew_check.isChecked():
-                    result_html += f'<tr><td><b>偏度</b></td><td>{desc.skewness:.4f}</td></tr>'
-                if kurtosis_check.isChecked():
-                    result_html += f'<tr><td><b>峰度</b></td><td>{desc.kurtosis:.4f}</td></tr>'
-                if percentiles_check.isChecked():
+                if check_widgets['均值'].isChecked():
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">均值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{desc.mean:.4f}</td></tr>'
+                if check_widgets['中位数'].isChecked():
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">中位数</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{np.median(data):.4f}</td></tr>'
+                if check_widgets['标准差'].isChecked():
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">标准差</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{np.std(data, ddof=1):.4f}</td></tr>'
+                if check_widgets['方差'].isChecked():
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">方差</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{desc.variance:.4f}</td></tr>'
+                if check_widgets['最小值'].isChecked():
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">最小值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{desc.minmax[0]:.4f}</td></tr>'
+                if check_widgets['最大值'].isChecked():
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">最大值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{desc.minmax[1]:.4f}</td></tr>'
+                if check_widgets['全距'].isChecked():
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">全距</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{desc.minmax[1] - desc.minmax[0]:.4f}</td></tr>'
+                if check_widgets['偏度'].isChecked():
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">偏度</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{desc.skewness:.4f}</td></tr>'
+                if check_widgets['峰度'].isChecked():
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">峰度</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{desc.kurtosis:.4f}</td></tr>'
+                if check_widgets['百分位数'].isChecked():
                     percentiles = np.percentile(data, [25, 50, 75])
-                    result_html += f'<tr><td><b>25%分位数</b></td><td>{percentiles[0]:.4f}</td></tr>'
-                    result_html += f'<tr><td><b>50%分位数</b></td><td>{percentiles[1]:.4f}</td></tr>'
-                    result_html += f'<tr><td><b>75%分位数</b></td><td>{percentiles[2]:.4f}</td></tr>'
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">25%分位数</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{percentiles[0]:.4f}</td></tr>'
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">50%分位数</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{percentiles[1]:.4f}</td></tr>'
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">75%分位数</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{percentiles[2]:.4f}</td></tr>'
                 if ci_check.isChecked():
                     ci = stats.t.interval(0.95, len(data)-1, loc=np.mean(data), scale=stats.sem(data))
-                    result_html += f'<tr><td><b>95%置信区间</b></td><td>[{ci[0]:.4f}, {ci[1]:.4f}]</td></tr>'
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">95%置信区间</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">[{ci[0]:.4f}, {ci[1]:.4f}]</td></tr>'
                 
-                result_html += '</table><br>'
+                result_html += '</table>'
                 
                 if chart_check.isChecked():
                     self.chart_canvas.figure.clear()
                     ax = self.chart_canvas.figure.add_subplot(111)
-                    ax.hist(data, bins='auto', edgecolor='black', alpha=0.7)
-                    ax.set_title(f'直方图 - {col}')
-                    ax.set_xlabel(col)
-                    ax.set_ylabel('频数')
-                    ax.grid(True, alpha=0.3)
+                    ax.hist(data, bins='auto', edgecolor='#e2e8f0', alpha=0.8, color='#6366f1')
+                    ax.set_title(f'直方图 - {col}', fontsize=12, fontweight='bold')
+                    ax.set_xlabel(col, fontsize=10)
+                    ax.set_ylabel('频数', fontsize=10)
+                    ax.grid(True, alpha=0.3, axis='y')
                     self.chart_canvas.draw()
-                    self.tab_widget.setCurrentWidget(self.chart_canvas)
+                    self.tab_widget.setCurrentIndex(2)
             
             self.results_text.setHtml(result_html)
-            self.tab_widget.setCurrentWidget(self.results_text)
+            self.tab_widget.setCurrentIndex(1)
             dialog.accept()
         
-        calculate_btn.clicked.connect(calculate)
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
         dialog.exec()
+    
+    def create_modern_dialog(self, title, width, height):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.resize(width, height)
+        dialog.setStyleSheet('''
+            QDialog {
+                background-color: #ffffff;
+            }
+        ''')
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(32, 32, 32, 32)
+        layout.setSpacing(20)
+        
+        return dialog
+    
+    def create_form_section(self, label_text):
+        section = QWidget()
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        
+        label = QLabel(label_text)
+        label.setFont(QFont('Inter', 12, QFont.Weight.Bold))
+        label.setStyleSheet('color: #1e293b;')
+        layout.addWidget(label)
+        
+        return section
+    
+    def create_button_layout(self, dialog):
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        return btn_layout
+    
+    def setup_dialog_buttons(self, dialog, btn_layout, calculate_callback):
+        cancel_btn = QPushButton('取消')
+        cancel_btn.setFont(QFont('Inter', 11, QFont.Weight.Medium))
+        cancel_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        cancel_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #f1f5f9;
+                color: #475569;
+                border: none;
+                border-radius: 10px;
+                padding: 12px 28px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #e2e8f0;
+            }
+        ''')
+        cancel_btn.clicked.connect(dialog.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        calculate_btn = QPushButton('计算')
+        calculate_btn.setDefault(True)
+        calculate_btn.setFont(QFont('Inter', 11, QFont.Weight.Medium))
+        calculate_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        calculate_btn.setStyleSheet('''
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6366f1, stop:1 #8b5cf6);
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 12px 28px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4f46e5, stop:1 #7c3aed);
+            }
+        ''')
+        calculate_btn.clicked.connect(calculate_callback)
+        btn_layout.addWidget(calculate_btn)
     
     def show_ttest_one_sample(self):
         if self.df.empty:
@@ -849,67 +722,111 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.warning(self, '警告', '没有数值型数据')
             return
         
-        dialog = QDialog(self)
-        dialog.setWindowTitle('单样本 t 检验')
-        dialog.resize(450, 350)
+        dialog = self.create_modern_dialog('单样本 t 检验', 520, 480)
+        main_layout = dialog.layout()
         
-        main_layout = QVBoxLayout(dialog)
-        
-        var_group = QWidget()
-        var_layout = QVBoxLayout(var_group)
-        var_layout.addWidget(QLabel('选择变量:'))
-        
+        var_group = self.create_form_section('选择变量:')
         combo = QComboBox()
         combo.addItems(numeric_cols)
-        var_layout.addWidget(combo)
+        combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+            QComboBox:hover {
+                border-color: #cbd5e1;
+            }
+            QComboBox:focus {
+                border-color: #6366f1;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                width: 12px;
+                height: 12px;
+            }
+        ''')
+        var_group.layout().addWidget(combo)
         main_layout.addWidget(var_group)
         
         test_value_group = QWidget()
         test_value_layout = QHBoxLayout(test_value_group)
-        test_value_layout.addWidget(QLabel('检验值:'))
+        test_value_layout.setContentsMargins(0, 0, 0, 0)
+        test_value_layout.setSpacing(12)
+        
+        test_label = QLabel('检验值:')
+        test_label.setFont(QFont('Inter', 12, QFont.Weight.Bold))
+        test_label.setStyleSheet('color: #1e293b;')
         
         test_value = QDoubleSpinBox()
         test_value.setRange(-1e9, 1e9)
         test_value.setValue(0)
         test_value.setDecimals(4)
+        test_value.setStyleSheet('''
+            QDoubleSpinBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        
+        test_value_layout.addWidget(test_label)
         test_value_layout.addWidget(test_value)
         main_layout.addWidget(test_value_group)
         
-        options_group = QWidget()
-        options_layout = QVBoxLayout(options_group)
-        options_layout.addWidget(QLabel('选项:'))
-        
+        options_group = self.create_form_section('选项:')
         ci_group = QWidget()
         ci_layout = QHBoxLayout(ci_group)
-        ci_layout.addWidget(QLabel('置信水平:'))
+        ci_layout.setContentsMargins(0, 0, 0, 0)
+        ci_layout.setSpacing(12)
+        
+        ci_label = QLabel('置信水平:')
+        ci_label.setFont(QFont('Inter', 11))
+        ci_label.setStyleSheet('color: #475569;')
         
         ci_combo = QComboBox()
         ci_combo.addItems(['90%', '95%', '99%'])
         ci_combo.setCurrentText('95%')
+        ci_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 8px 12px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        
+        ci_layout.addWidget(ci_label)
         ci_layout.addWidget(ci_combo)
-        options_layout.addWidget(ci_group)
+        options_group.layout().addWidget(ci_group)
         
         chart_check = QCheckBox('生成箱线图')
-        chart_check.setChecked(False)
-        options_layout.addWidget(chart_check)
+        chart_check.setFont(QFont('Inter', 11))
+        chart_check.setStyleSheet('color: #475569;')
+        options_group.layout().addWidget(chart_check)
         
         effect_size_check = QCheckBox('计算效应量 (Cohen\'s d)')
         effect_size_check.setChecked(True)
-        options_layout.addWidget(effect_size_check)
+        effect_size_check.setFont(QFont('Inter', 11))
+        effect_size_check.setStyleSheet('color: #475569;')
+        options_group.layout().addWidget(effect_size_check)
         
         main_layout.addWidget(options_group)
         
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        cancel_btn = QPushButton('取消')
-        cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(cancel_btn)
-        
-        calculate_btn = QPushButton('计算')
-        calculate_btn.setDefault(True)
-        btn_layout.addWidget(calculate_btn)
-        
+        btn_layout = self.create_button_layout(dialog)
         main_layout.addLayout(btn_layout)
         
         def calculate():
@@ -925,41 +842,39 @@ class AnalyXMainWindow(QMainWindow):
             
             cohens_d = mean_diff / np.std(data, ddof=1)
             
-            result_html = f'''
-            <h2>单样本 t 检验 - {col}</h2>
-            <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-            <tr><td><b>t 值</b></td><td>{t_stat:.4f}</td></tr>
-            <tr><td><b>自由度</b></td><td>{len(data)-1}</td></tr>
-            <tr><td><b>P 值</b></td><td>{p_val:.6f}</td></tr>
-            <tr><td><b>显著性</b></td><td>{'显著 (p < 0.05)' if p_val < 0.05 else '不显著'}</td></tr>
-            <tr><td><b>均值差</b></td><td>{mean_diff:.4f}</td></tr>
-            <tr><td><b>标准误差</b></td><td>{se_diff:.4f}</td></tr>
-            <tr><td><b>{int(ci_level*100)}% 置信区间</b></td><td>[{ci[0]-test_value.value():.4f}, {ci[1]-test_value.value():.4f}]</td></tr>
-            '''
+            result_html = f'<h2 style="color: #1e293b; margin-bottom: 20px;">单样本 t 检验 - {col}</h2>'
+            result_html += '<table style="border-collapse: collapse; width: 100%;">'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">t 值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{t_stat:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">自由度</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{len(data)-1}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">P 值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{p_val:.6f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">显著性</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{"显著 (p < 0.05)" if p_val < 0.05 else "不显著"}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">均值差</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{mean_diff:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">标准误差</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{se_diff:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">{int(ci_level*100)}% 置信区间</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">[{ci[0]-test_value.value():.4f}, {ci[1]-test_value.value():.4f}]</td></tr>'
             
             if effect_size_check.isChecked():
-                result_html += f'<tr><td><b>Cohen\'s d</b></td><td>{cohens_d:.4f}</td></tr>'
+                result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">Cohen\'s d</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{cohens_d:.4f}</td></tr>'
             
             result_html += '</table>'
             
             self.results_text.setHtml(result_html)
-            self.tab_widget.setCurrentWidget(self.results_text)
+            self.tab_widget.setCurrentIndex(1)
             
             if chart_check.isChecked():
                 self.chart_canvas.figure.clear()
                 ax = self.chart_canvas.figure.add_subplot(111)
-                ax.boxplot(data, vert=True)
-                ax.axhline(y=test_value.value(), color='r', linestyle='--', label=f'检验值: {test_value.value()}')
-                ax.set_title(f'箱线图 - {col}')
-                ax.set_ylabel(col)
+                ax.boxplot(data, vert=True, patch_artist=True, boxprops=dict(facecolor='#6366f1', alpha=0.7))
+                ax.axhline(y=test_value.value(), color='#ef4444', linestyle='--', linewidth=2, label=f'检验值: {test_value.value()}')
+                ax.set_title(f'箱线图 - {col}', fontsize=12, fontweight='bold')
+                ax.set_ylabel(col, fontsize=10)
                 ax.grid(True, alpha=0.3, axis='y')
                 ax.legend()
                 self.chart_canvas.draw()
-                self.tab_widget.setCurrentWidget(self.chart_canvas)
+                self.tab_widget.setCurrentIndex(2)
             
             dialog.accept()
         
-        calculate_btn.clicked.connect(calculate)
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
         dialog.exec()
     
     def show_ttest_independent(self):
@@ -973,20 +888,55 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.warning(self, '警告', '没有数值型数据')
             return
         
-        dialog = QDialog(self)
-        dialog.setWindowTitle('独立样本 t 检验')
-        layout = QFormLayout(dialog)
+        dialog = self.create_modern_dialog('独立样本 t 检验', 520, 400)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(32, 32, 32, 32)
+        layout.setSpacing(20)
+        
+        test_var_label = QLabel('检验变量:')
+        test_var_label.setFont(QFont('Inter', 12, QFont.Weight.Bold))
+        test_var_label.setStyleSheet('color: #1e293b;')
+        layout.addWidget(test_var_label)
         
         test_var_combo = QComboBox()
         test_var_combo.addItems(numeric_cols)
-        layout.addRow('检验变量:', test_var_combo)
+        test_var_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        layout.addWidget(test_var_combo)
+        
+        group_var_label = QLabel('分组变量:')
+        group_var_label.setFont(QFont('Inter', 12, QFont.Weight.Bold))
+        group_var_label.setStyleSheet('color: #1e293b;')
+        layout.addWidget(group_var_label)
         
         group_var_combo = QComboBox()
         group_var_combo.addItems(all_cols)
-        layout.addRow('分组变量:', group_var_combo)
+        group_var_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        layout.addWidget(group_var_combo)
         
-        btn = QPushButton('计算')
-        layout.addRow(btn)
+        layout.addStretch()
+        
+        btn_layout = self.create_button_layout(dialog)
+        layout.addLayout(btn_layout)
         
         def calculate():
             test_col = test_var_combo.currentText()
@@ -1006,23 +956,22 @@ class AnalyXMainWindow(QMainWindow):
             mean1 = np.mean(group1)
             mean2 = np.mean(group2)
             
-            result_html = f'''
-            <h2>独立样本 t 检验</h2>
-            <p>检验变量: {test_col}, 分组变量: {group_col}</p>
-            <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-            <tr><td><b>组1均值</b></td><td>{mean1:.4f}</td></tr>
-            <tr><td><b>组2均值</b></td><td>{mean2:.4f}</td></tr>
-            <tr><td><b>均值差</b></td><td>{mean1 - mean2:.4f}</td></tr>
-            <tr><td><b>t 值</b></td><td>{t_stat:.4f}</td></tr>
-            <tr><td><b>P 值</b></td><td>{p_val:.6f}</td></tr>
-            <tr><td><b>显著性</b></td><td>{'显著 (p < 0.05)' if p_val < 0.05 else '不显著'}</td></tr>
-            </table>
-            '''
+            result_html = f'<h2 style="color: #1e293b; margin-bottom: 20px;">独立样本 t 检验</h2>'
+            result_html += f'<p style="color: #64748b; margin-bottom: 16px;">检验变量: {test_col}, 分组变量: {group_col}</p>'
+            result_html += '<table style="border-collapse: collapse; width: 100%;">'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">组1均值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{mean1:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">组2均值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{mean2:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">均值差</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{mean1 - mean2:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">t 值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{t_stat:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">P 值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{p_val:.6f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">显著性</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{"显著 (p < 0.05)" if p_val < 0.05 else "不显著"}</td></tr>'
+            result_html += '</table>'
+            
             self.results_text.setHtml(result_html)
-            self.tab_widget.setCurrentWidget(self.results_text)
+            self.tab_widget.setCurrentIndex(1)
             dialog.accept()
         
-        btn.clicked.connect(calculate)
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
         dialog.exec()
     
     def show_ttest_paired(self):
@@ -1035,22 +984,57 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.warning(self, '警告', '至少需要2个数值型变量')
             return
         
-        dialog = QDialog(self)
-        dialog.setWindowTitle('配对样本 t 检验')
-        layout = QFormLayout(dialog)
+        dialog = self.create_modern_dialog('配对样本 t 检验', 520, 400)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(32, 32, 32, 32)
+        layout.setSpacing(20)
+        
+        var1_label = QLabel('变量1 (前测):')
+        var1_label.setFont(QFont('Inter', 12, QFont.Weight.Bold))
+        var1_label.setStyleSheet('color: #1e293b;')
+        layout.addWidget(var1_label)
         
         var1_combo = QComboBox()
         var1_combo.addItems(numeric_cols)
-        layout.addRow('变量1 (前测):', var1_combo)
+        var1_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        layout.addWidget(var1_combo)
+        
+        var2_label = QLabel('变量2 (后测):')
+        var2_label.setFont(QFont('Inter', 12, QFont.Weight.Bold))
+        var2_label.setStyleSheet('color: #1e293b;')
+        layout.addWidget(var2_label)
         
         var2_combo = QComboBox()
         var2_combo.addItems(numeric_cols)
         if len(numeric_cols) > 1:
             var2_combo.setCurrentIndex(1)
-        layout.addRow('变量2 (后测):', var2_combo)
+        var2_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        layout.addWidget(var2_combo)
         
-        btn = QPushButton('计算')
-        layout.addRow(btn)
+        layout.addStretch()
+        
+        btn_layout = self.create_button_layout(dialog)
+        layout.addLayout(btn_layout)
         
         def calculate():
             col1 = var1_combo.currentText()
@@ -1059,20 +1043,19 @@ class AnalyXMainWindow(QMainWindow):
             data = self.df[[col1, col2]].dropna()
             t_stat, p_val = stats.ttest_rel(data[col1], data[col2])
             
-            result_html = f'''
-            <h2>配对样本 t 检验</h2>
-            <p>{col1} vs {col2}</p>
-            <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-            <tr><td><b>t 值</b></td><td>{t_stat:.4f}</td></tr>
-            <tr><td><b>P 值</b></td><td>{p_val:.6f}</td></tr>
-            <tr><td><b>显著性</b></td><td>{'显著 (p < 0.05)' if p_val < 0.05 else '不显著'}</td></tr>
-            </table>
-            '''
+            result_html = f'<h2 style="color: #1e293b; margin-bottom: 20px;">配对样本 t 检验</h2>'
+            result_html += f'<p style="color: #64748b; margin-bottom: 16px;">{col1} vs {col2}</p>'
+            result_html += '<table style="border-collapse: collapse; width: 100%;">'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">t 值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{t_stat:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">P 值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{p_val:.6f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">显著性</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{"显著 (p < 0.05)" if p_val < 0.05 else "不显著"}</td></tr>'
+            result_html += '</table>'
+            
             self.results_text.setHtml(result_html)
-            self.tab_widget.setCurrentWidget(self.results_text)
+            self.tab_widget.setCurrentIndex(1)
             dialog.accept()
         
-        btn.clicked.connect(calculate)
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
         dialog.exec()
     
     def show_anova(self):
@@ -1086,59 +1069,63 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.warning(self, '警告', '没有数值型数据')
             return
         
-        dialog = QDialog(self)
-        dialog.setWindowTitle('单因素 ANOVA')
-        dialog.resize(450, 350)
+        dialog = self.create_modern_dialog('单因素 ANOVA', 520, 520)
+        main_layout = dialog.layout()
         
-        main_layout = QVBoxLayout(dialog)
-        
-        dep_var_group = QWidget()
-        dep_var_layout = QVBoxLayout(dep_var_group)
-        dep_var_layout.addWidget(QLabel('因变量:'))
-        
+        dep_var_group = self.create_form_section('因变量:')
         dep_var_combo = QComboBox()
         dep_var_combo.addItems(numeric_cols)
-        dep_var_layout.addWidget(dep_var_combo)
+        dep_var_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        dep_var_group.layout().addWidget(dep_var_combo)
         main_layout.addWidget(dep_var_group)
         
-        factor_group = QWidget()
-        factor_layout = QVBoxLayout(factor_group)
-        factor_layout.addWidget(QLabel('因子 (分组):'))
-        
+        factor_group = self.create_form_section('因子 (分组):')
         factor_combo = QComboBox()
         factor_combo.addItems(all_cols)
-        factor_layout.addWidget(factor_combo)
+        factor_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        factor_group.layout().addWidget(factor_combo)
         main_layout.addWidget(factor_group)
         
-        options_group = QWidget()
-        options_layout = QVBoxLayout(options_group)
-        options_layout.addWidget(QLabel('选项:'))
-        
+        options_group = self.create_form_section('选项:')
         post_hoc_check = QCheckBox('执行事后检验 (Tukey HSD)')
-        post_hoc_check.setChecked(False)
-        options_layout.addWidget(post_hoc_check)
+        post_hoc_check.setFont(QFont('Inter', 11))
+        post_hoc_check.setStyleSheet('color: #475569;')
+        options_group.layout().addWidget(post_hoc_check)
         
         chart_check = QCheckBox('生成箱线图')
-        chart_check.setChecked(False)
-        options_layout.addWidget(chart_check)
+        chart_check.setFont(QFont('Inter', 11))
+        chart_check.setStyleSheet('color: #475569;')
+        options_group.layout().addWidget(chart_check)
         
         effect_size_check = QCheckBox('计算效应量 (η²)')
         effect_size_check.setChecked(True)
-        options_layout.addWidget(effect_size_check)
+        effect_size_check.setFont(QFont('Inter', 11))
+        effect_size_check.setStyleSheet('color: #475569;')
+        options_group.layout().addWidget(effect_size_check)
         
         main_layout.addWidget(options_group)
         
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        cancel_btn = QPushButton('取消')
-        cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(cancel_btn)
-        
-        calculate_btn = QPushButton('计算')
-        calculate_btn.setDefault(True)
-        btn_layout.addWidget(calculate_btn)
-        
+        btn_layout = self.create_button_layout(dialog)
         main_layout.addLayout(btn_layout)
         
         def calculate():
@@ -1159,17 +1146,15 @@ class AnalyXMainWindow(QMainWindow):
             ss_total = sum(sum((x - grand_mean) ** 2 for x in g) for g in groups)
             eta_squared = ss_between / ss_total
             
-            result_html = f'''
-            <h2>单因素方差分析 (ANOVA)</h2>
-            <p>因变量: {dep_col}, 因子: {factor_col}</p>
-            <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-            <tr><td><b>F 值</b></td><td>{f_stat:.4f}</td></tr>
-            <tr><td><b>P 值</b></td><td>{p_val:.6f}</td></tr>
-            <tr><td><b>显著性</b></td><td>{'显著 (p < 0.05)' if p_val < 0.05 else '不显著'}</td></tr>
-            '''
+            result_html = f'<h2 style="color: #1e293b; margin-bottom: 20px;">单因素方差分析 (ANOVA)</h2>'
+            result_html += f'<p style="color: #64748b; margin-bottom: 16px;">因变量: {dep_col}, 因子: {factor_col}</p>'
+            result_html += '<table style="border-collapse: collapse; width: 100%;">'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">F 值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{f_stat:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">P 值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{p_val:.6f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">显著性</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{"显著 (p < 0.05)" if p_val < 0.05 else "不显著"}</td></tr>'
             
             if effect_size_check.isChecked():
-                result_html += f'<tr><td><b>η² (效应量)</b></td><td>{eta_squared:.4f}</td></tr>'
+                result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">η² (效应量)</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{eta_squared:.4f}</td></tr>'
             
             result_html += '</table>'
             
@@ -1184,9 +1169,9 @@ class AnalyXMainWindow(QMainWindow):
                 
                 tukey = pairwise_tukeyhsd(data, labels, alpha=0.05)
                 
-                result_html += '<h3>事后检验 (Tukey HSD)</h3>'
-                result_html += '''<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-                <tr><th>比较组</th><th>均值差</th><th>p 值</th><th>显著性</th></tr>'''
+                result_html += '<h3 style="color: #6366f1; margin-top: 24px; margin-bottom: 12px;">事后检验 (Tukey HSD)</h3>'
+                result_html += '<table style="border-collapse: collapse; width: 100%;">'
+                result_html += '<tr><th style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">比较组</th><th style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">均值差</th><th style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">p 值</th><th style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">显著性</th></tr>'
                 
                 for i, (group1, group2, meandiff, p, reject) in enumerate(zip(
                     tukey.groupsunique[tukey.group1inds],
@@ -1195,27 +1180,30 @@ class AnalyXMainWindow(QMainWindow):
                     tukey.pvalues,
                     tukey.reject
                 )):
-                    result_html += f'<tr><td>{group1} vs {group2}</td><td>{meandiff:.4f}</td><td>{p:.4f}</td><td>{"显著" if reject else "不显著"}</td></tr>'
+                    result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{group1} vs {group2}</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{meandiff:.4f}</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{p:.4f}</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{"显著" if reject else "不显著"}</td></tr>'
                 
                 result_html += '</table>'
             
             self.results_text.setHtml(result_html)
-            self.tab_widget.setCurrentWidget(self.results_text)
+            self.tab_widget.setCurrentIndex(1)
             
             if chart_check.isChecked():
                 self.chart_canvas.figure.clear()
                 ax = self.chart_canvas.figure.add_subplot(111)
-                ax.boxplot(groups, vert=True)
-                ax.set_title(f'箱线图 - {dep_col} by {factor_col}')
-                ax.set_ylabel(dep_col)
+                bp = ax.boxplot(groups, vert=True, patch_artist=True)
+                for patch in bp['boxes']:
+                    patch.set_facecolor('#6366f1')
+                    patch.set_alpha(0.7)
+                ax.set_title(f'箱线图 - {dep_col} by {factor_col}', fontsize=12, fontweight='bold')
+                ax.set_ylabel(dep_col, fontsize=10)
                 ax.set_xticklabels([f'组{i+1}' for i in range(len(groups))])
                 ax.grid(True, alpha=0.3, axis='y')
                 self.chart_canvas.draw()
-                self.tab_widget.setCurrentWidget(self.chart_canvas)
+                self.tab_widget.setCurrentIndex(2)
             
             dialog.accept()
         
-        calculate_btn.clicked.connect(calculate)
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
         dialog.exec()
     
     def show_correlation(self):
@@ -1228,65 +1216,110 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.warning(self, '警告', '至少需要2个数值型变量')
             return
         
-        dialog = QDialog(self)
-        dialog.setWindowTitle('相关分析')
-        dialog.resize(450, 350)
+        dialog = self.create_modern_dialog('相关分析', 540, 540)
+        main_layout = dialog.layout()
         
-        main_layout = QVBoxLayout(dialog)
-        
-        var_group = QWidget()
-        var_layout = QVBoxLayout(var_group)
-        var_layout.addWidget(QLabel('变量选择:'))
-        
+        var_group = self.create_form_section('变量选择:')
         var1_layout = QHBoxLayout()
-        var1_layout.addWidget(QLabel('变量 X:'))
+        var1_layout.setSpacing(12)
+        var1_label = QLabel('变量 X:')
+        var1_label.setFont(QFont('Inter', 11))
+        var1_label.setStyleSheet('color: #475569;')
         var1_combo = QComboBox()
         var1_combo.addItems(numeric_cols)
+        var1_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 10px 14px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        var1_layout.addWidget(var1_label)
         var1_layout.addWidget(var1_combo)
-        var_layout.addLayout(var1_layout)
+        var_group.layout().addLayout(var1_layout)
         
         var2_layout = QHBoxLayout()
-        var2_layout.addWidget(QLabel('变量 Y:'))
+        var2_layout.setSpacing(12)
+        var2_label = QLabel('变量 Y:')
+        var2_label.setFont(QFont('Inter', 11))
+        var2_label.setStyleSheet('color: #475569;')
         var2_combo = QComboBox()
         var2_combo.addItems(numeric_cols)
         if len(numeric_cols) > 1:
             var2_combo.setCurrentIndex(1)
+        var2_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 10px 14px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        var2_layout.addWidget(var2_label)
         var2_layout.addWidget(var2_combo)
-        var_layout.addLayout(var2_layout)
-        
+        var_group.layout().addLayout(var2_layout)
         main_layout.addWidget(var_group)
         
-        method_group = QWidget()
-        method_layout = QVBoxLayout(method_group)
-        method_layout.addWidget(QLabel('相关方法:'))
-        
+        method_group = self.create_form_section('相关方法:')
         method_combo = QComboBox()
         method_combo.addItems(['Pearson', 'Spearman', 'Kendall'])
-        method_layout.addWidget(method_combo)
+        method_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 10px 14px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        method_group.layout().addWidget(method_combo)
         main_layout.addWidget(method_group)
         
-        options_group = QWidget()
-        options_layout = QVBoxLayout(options_group)
-        options_layout.addWidget(QLabel('选项:'))
-        
+        options_group = self.create_form_section('选项:')
         ci_group = QWidget()
         ci_layout = QHBoxLayout(ci_group)
-        ci_layout.addWidget(QLabel('置信水平:'))
-        
+        ci_layout.setContentsMargins(0, 0, 0, 0)
+        ci_layout.setSpacing(12)
+        ci_label = QLabel('置信水平:')
+        ci_label.setFont(QFont('Inter', 11))
+        ci_label.setStyleSheet('color: #475569;')
         ci_combo = QComboBox()
         ci_combo.addItems(['90%', '95%', '99%'])
         ci_combo.setCurrentText('95%')
+        ci_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 8px 12px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        ci_layout.addWidget(ci_label)
         ci_layout.addWidget(ci_combo)
-        options_layout.addWidget(ci_group)
+        options_group.layout().addWidget(ci_group)
         
         chart_check = QCheckBox('生成散点图')
-        chart_check.setChecked(False)
-        options_layout.addWidget(chart_check)
+        chart_check.setFont(QFont('Inter', 11))
+        chart_check.setStyleSheet('color: #475569;')
+        options_group.layout().addWidget(chart_check)
         
         regression_check = QCheckBox('添加回归直线')
-        regression_check.setChecked(False)
+        regression_check.setFont(QFont('Inter', 11))
+        regression_check.setStyleSheet('color: #475569;')
         regression_check.setEnabled(False)
-        options_layout.addWidget(regression_check)
+        options_group.layout().addWidget(regression_check)
         
         def on_chart_check_changed(state):
             regression_check.setEnabled(state == Qt.CheckState.Checked)
@@ -1294,17 +1327,7 @@ class AnalyXMainWindow(QMainWindow):
         
         main_layout.addWidget(options_group)
         
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        cancel_btn = QPushButton('取消')
-        cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(cancel_btn)
-        
-        calculate_btn = QPushButton('计算')
-        calculate_btn.setDefault(True)
-        btn_layout.addWidget(calculate_btn)
-        
+        btn_layout = self.create_button_layout(dialog)
         main_layout.addLayout(btn_layout)
         
         def calculate():
@@ -1321,53 +1344,37 @@ class AnalyXMainWindow(QMainWindow):
             else:
                 corr, p_val = stats.kendalltau(data[col1], data[col2])
             
-            ci_level = float(ci_combo.currentText().strip('%')) / 100
-            
-            result_html = f'''
-            <h2>相关分析 - {method}</h2>
-            <p>{col1} & {col2}</p>
-            <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-            <tr><td><b>相关系数</b></td><td>{corr:.4f}</td></tr>
-            <tr><td><b>样本量 N</b></td><td>{len(data)}</td></tr>
-            <tr><td><b>P 值</b></td><td>{p_val:.6f}</td></tr>
-            <tr><td><b>显著性</b></td><td>{'显著 (p < 0.05)' if p_val < 0.05 else '不显著'}</td></tr>
-            '''
-            
-            if method == 'Pearson' and len(data) > 3:
-                import math
-                z = 0.5 * math.log((1 + corr) / (1 - corr))
-                se = 1 / math.sqrt(len(data) - 3)
-                z_ci = stats.norm.interval(ci_level, loc=z, scale=se)
-                ci_lower = (math.exp(2 * z_ci[0]) - 1) / (math.exp(2 * z_ci[0]) + 1)
-                ci_upper = (math.exp(2 * z_ci[1]) - 1) / (math.exp(2 * z_ci[1]) + 1)
-                result_html += f'<tr><td><b>{int(ci_level*100)}% 置信区间</b></td><td>[{ci_lower:.4f}, {ci_upper:.4f}]</td></tr>'
-            
+            result_html = f'<h2 style="color: #1e293b; margin-bottom: 20px;">相关分析</h2>'
+            result_html += f'<p style="color: #64748b; margin-bottom: 16px;">{col1} 与 {col2} ({method})</p>'
+            result_html += '<table style="border-collapse: collapse; width: 100%;">'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">相关系数</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{corr:.4f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">P 值</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{p_val:.6f}</td></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">显著性</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{"显著 (p < 0.05)" if p_val < 0.05 else "不显著"}</td></tr>'
             result_html += '</table>'
             
             self.results_text.setHtml(result_html)
-            self.tab_widget.setCurrentWidget(self.results_text)
+            self.tab_widget.setCurrentIndex(1)
             
             if chart_check.isChecked():
                 self.chart_canvas.figure.clear()
                 ax = self.chart_canvas.figure.add_subplot(111)
-                ax.scatter(data[col1], data[col2], alpha=0.6, edgecolor='black')
-                ax.set_title(f'散点图 - {col1} vs {col2}')
-                ax.set_xlabel(col1)
-                ax.set_ylabel(col2)
-                ax.grid(True, alpha=0.3)
+                ax.scatter(data[col1], data[col2], alpha=0.7, color='#6366f1', s=50)
                 
                 if regression_check.isChecked():
                     z = np.polyfit(data[col1], data[col2], 1)
                     p = np.poly1d(z)
-                    ax.plot(data[col1], p(data[col1]), "r--", alpha=0.8, label='回归直线')
-                    ax.legend()
+                    ax.plot(data[col1], p(data[col1]), color='#ef4444', linewidth=2)
                 
+                ax.set_title(f'散点图 - {col1} vs {col2}', fontsize=12, fontweight='bold')
+                ax.set_xlabel(col1, fontsize=10)
+                ax.set_ylabel(col2, fontsize=10)
+                ax.grid(True, alpha=0.3)
                 self.chart_canvas.draw()
-                self.tab_widget.setCurrentWidget(self.chart_canvas)
+                self.tab_widget.setCurrentIndex(2)
             
             dialog.accept()
         
-        calculate_btn.clicked.connect(calculate)
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
         dialog.exec()
     
     def show_regression(self):
@@ -1380,142 +1387,96 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.warning(self, '警告', '至少需要2个数值型变量')
             return
         
-        dialog = QDialog(self)
-        dialog.setWindowTitle('简单线性回归')
-        dialog.resize(450, 350)
+        dialog = self.create_modern_dialog('回归分析', 540, 480)
+        main_layout = dialog.layout()
         
-        main_layout = QVBoxLayout(dialog)
+        dep_var_group = self.create_form_section('因变量 (Y):')
+        dep_var_combo = QComboBox()
+        dep_var_combo.addItems(numeric_cols)
+        dep_var_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        dep_var_group.layout().addWidget(dep_var_combo)
+        main_layout.addWidget(dep_var_group)
         
-        var_group = QWidget()
-        var_layout = QVBoxLayout(var_group)
-        var_layout.addWidget(QLabel('变量选择:'))
+        indep_var_group = self.create_form_section('自变量 (X):')
+        indep_var_list = QListWidget()
+        indep_var_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        indep_var_list.addItems(numeric_cols)
+        if numeric_cols:
+            indep_var_list.setCurrentRow(1)
+        indep_var_list.setStyleSheet('''
+            QListWidget {
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 8px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+            QListWidget::item {
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin: 2px 0;
+            }
+            QListWidget::item:selected {
+                background-color: #6366f1;
+                color: white;
+            }
+        ''')
+        indep_var_group.layout().addWidget(indep_var_list)
+        main_layout.addWidget(indep_var_group)
         
-        x_layout = QHBoxLayout()
-        x_layout.addWidget(QLabel('自变量 X:'))
-        x_combo = QComboBox()
-        x_combo.addItems(numeric_cols)
-        x_layout.addWidget(x_combo)
-        var_layout.addLayout(x_layout)
-        
-        y_layout = QHBoxLayout()
-        y_layout.addWidget(QLabel('因变量 Y:'))
-        y_combo = QComboBox()
-        y_combo.addItems(numeric_cols)
-        if len(numeric_cols) > 1:
-            y_combo.setCurrentIndex(1)
-        y_layout.addWidget(y_combo)
-        var_layout.addLayout(y_layout)
-        
-        main_layout.addWidget(var_group)
-        
-        options_group = QWidget()
-        options_layout = QVBoxLayout(options_group)
-        options_layout.addWidget(QLabel('选项:'))
-        
-        ci_group = QWidget()
-        ci_layout = QHBoxLayout(ci_group)
-        ci_layout.addWidget(QLabel('置信水平:'))
-        
-        ci_combo = QComboBox()
-        ci_combo.addItems(['90%', '95%', '99%'])
-        ci_combo.setCurrentText('95%')
-        ci_layout.addWidget(ci_combo)
-        options_layout.addWidget(ci_group)
-        
-        chart_check = QCheckBox('生成散点图和回归直线')
-        chart_check.setChecked(False)
-        options_layout.addWidget(chart_check)
-        
-        residual_check = QCheckBox('执行残差分析')
-        residual_check.setChecked(False)
-        options_layout.addWidget(residual_check)
-        
-        main_layout.addWidget(options_group)
-        
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        cancel_btn = QPushButton('取消')
-        cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(cancel_btn)
-        
-        calculate_btn = QPushButton('计算')
-        calculate_btn.setDefault(True)
-        btn_layout.addWidget(calculate_btn)
-        
+        btn_layout = self.create_button_layout(dialog)
         main_layout.addLayout(btn_layout)
         
         def calculate():
-            x_col = x_combo.currentText()
-            y_col = y_combo.currentText()
+            dep_col = dep_var_combo.currentText()
+            selected_indeps = [item.text() for item in indep_var_list.selectedItems()]
             
-            data = self.df[[x_col, y_col]].dropna()
-            x = data[x_col].values
-            y = data[y_col].values
+            if not selected_indeps:
+                QMessageBox.warning(self, '警告', '请至少选择一个自变量')
+                return
             
-            slope, intercept, r_value, p_val, std_err = stats.linregress(x, y)
-            r_squared = r_value ** 2
-            adjusted_r_squared = 1 - (1 - r_squared) * (len(y) - 1) / (len(y) - 2)
+            data = self.df[[dep_col] + selected_indeps].dropna()
             
-            ci_level = float(ci_combo.currentText().strip('%')) / 100
+            from sklearn.linear_model import LinearRegression
             
-            df = len(y) - 2
-            t_critical = stats.t.ppf((1 + ci_level) / 2, df)
-            intercept_ci = (intercept - t_critical * std_err, intercept + t_critical * std_err)
-            slope_ci = (slope - t_critical * std_err, slope + t_critical * std_err)
+            X = data[selected_indeps].values
+            y = data[dep_col].values
             
-            result_html = f'''
-            <h2>简单线性回归</h2>
-            <p>Y = {y_col}, X = {x_col}</p>
-            <h3>模型摘要</h3>
-            <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-            <tr><td><b>R</b></td><td>{r_value:.4f}</td></tr>
-            <tr><td><b>R²</b></td><td>{r_squared:.4f}</td></tr>
-            <tr><td><b>调整 R²</b></td><td>{adjusted_r_squared:.4f}</td></tr>
-            <tr><td><b>样本量 N</b></td><td>{len(y)}</td></tr>
-            </table>
-            <h3>系数</h3>
-            <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-            <tr><th></th><th>系数</th><th>标准误</th><th>t</th><th>P</th><th>{int(ci_level*100)}% 置信区间</th></tr>
-            <tr><td><b>(截距)</b></td><td>{intercept:.4f}</td><td>{std_err:.4f}</td><td>{intercept/std_err:.4f}</td><td>{stats.t.sf(abs(intercept/std_err), df):.6f}</td><td>[{intercept_ci[0]:.4f}, {intercept_ci[1]:.4f}]</td></tr>
-            <tr><td><b>{x_col}</b></td><td>{slope:.4f}</td><td>{std_err:.4f}</td><td>{slope/std_err:.4f}</td><td>{p_val:.6f}</td><td>[{slope_ci[0]:.4f}, {slope_ci[1]:.4f}]</td></tr>
-            </table>
-            '''
+            model = LinearRegression()
+            model.fit(X, y)
             
-            if residual_check.isChecked():
-                y_pred = intercept + slope * x
-                residuals = y - y_pred
-                residual_mean = np.mean(residuals)
-                residual_std = np.std(residuals)
-                
-                result_html += '<h3>残差分析</h3>'
-                result_html += '''<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-                <tr><td><b>残差均值</b></td><td>{:.4f}</td></tr>
-                <tr><td><b>残差标准差</b></td><td>{:.4f}</td></tr>
-                <tr><td><b>残差最小值</b></td><td>{:.4f}</td></tr>
-                <tr><td><b>残差最大值</b></td><td>{:.4f}</td></tr>
-                </table>'''.format(residual_mean, residual_std, np.min(residuals), np.max(residuals))
+            result_html = f'<h2 style="color: #1e293b; margin-bottom: 20px;">回归分析</h2>'
+            result_html += f'<p style="color: #64748b; margin-bottom: 16px;">因变量: {dep_col}</p>'
+            result_html += '<h3 style="color: #6366f1; margin-top: 20px; margin-bottom: 12px;">回归系数</h3>'
+            result_html += '<table style="border-collapse: collapse; width: 100%;">'
+            result_html += '<tr><th style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">变量</th><th style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">系数</th></tr>'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">截距</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{model.intercept_:.4f}</td></tr>'
+            
+            for i, col in enumerate(selected_indeps):
+                result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{col}</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{model.coef_[i]:.4f}</td></tr>'
+            
+            result_html += '</table>'
+            result_html += f'<h3 style="color: #6366f1; margin-top: 20px; margin-bottom: 12px;">模型拟合</h3>'
+            result_html += '<table style="border-collapse: collapse; width: 100%;">'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">R²</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0;">{model.score(X, y):.4f}</td></tr>'
+            result_html += '</table>'
             
             self.results_text.setHtml(result_html)
-            self.tab_widget.setCurrentWidget(self.results_text)
-            
-            if chart_check.isChecked():
-                self.chart_canvas.figure.clear()
-                ax = self.chart_canvas.figure.add_subplot(111)
-                ax.scatter(x, y, alpha=0.6, edgecolor='black', label='数据点')
-                y_pred = intercept + slope * x
-                ax.plot(x, y_pred, 'r--', alpha=0.8, label='回归直线')
-                ax.set_title(f'回归分析 - {y_col} vs {x_col}')
-                ax.set_xlabel(x_col)
-                ax.set_ylabel(y_col)
-                ax.grid(True, alpha=0.3)
-                ax.legend()
-                self.chart_canvas.draw()
-                self.tab_widget.setCurrentWidget(self.chart_canvas)
-            
+            self.tab_widget.setCurrentIndex(1)
             dialog.accept()
         
-        calculate_btn.clicked.connect(calculate)
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
         dialog.exec()
     
     def show_reliability(self):
@@ -1528,141 +1489,81 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.warning(self, '警告', '至少需要2个数值型变量')
             return
         
-        dialog = QDialog(self)
-        dialog.setWindowTitle('信度分析 (Cronbach α)')
-        dialog.resize(450, 350)
+        dialog = self.create_modern_dialog('信度分析', 520, 460)
+        main_layout = dialog.layout()
         
-        main_layout = QVBoxLayout(dialog)
+        var_group = self.create_form_section('选择量表题项 (可多选):')
+        var_list = QListWidget()
+        var_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        var_list.addItems(numeric_cols)
+        var_list.setStyleSheet('''
+            QListWidget {
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 8px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+            QListWidget::item {
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin: 2px 0;
+            }
+            QListWidget::item:selected {
+                background-color: #6366f1;
+                color: white;
+            }
+        ''')
+        var_group.layout().addWidget(var_list)
+        main_layout.addWidget(var_group)
         
-        item_group = QWidget()
-        item_layout = QVBoxLayout(item_group)
-        item_layout.addWidget(QLabel('选择量表题项 (可多选):'))
-        
-        list_widget = QListWidget()
-        list_widget.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-        list_widget.addItems(numeric_cols)
-        for i in range(min(5, len(numeric_cols))):
-            list_widget.item(i).setSelected(True)
-        item_layout.addWidget(list_widget)
-        main_layout.addWidget(item_group)
-        
-        options_group = QWidget()
-        options_layout = QVBoxLayout(options_group)
-        options_layout.addWidget(QLabel('选项:'))
-        
-        item_analysis_check = QCheckBox('执行项目分析')
-        item_analysis_check.setChecked(False)
-        options_layout.addWidget(item_analysis_check)
-        
-        delete_items_check = QCheckBox('自动删除低信度题项')
-        delete_items_check.setChecked(False)
-        delete_items_check.setEnabled(False)
-        options_layout.addWidget(delete_items_check)
-        
-        def on_item_analysis_changed(state):
-            delete_items_check.setEnabled(state == Qt.CheckState.Checked)
-        item_analysis_check.stateChanged.connect(on_item_analysis_changed)
-        
-        main_layout.addWidget(options_group)
-        
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        cancel_btn = QPushButton('取消')
-        cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(cancel_btn)
-        
-        calculate_btn = QPushButton('计算 Cronbach α')
-        calculate_btn.setDefault(True)
-        btn_layout.addWidget(calculate_btn)
-        
+        btn_layout = self.create_button_layout(dialog)
         main_layout.addLayout(btn_layout)
         
         def calculate():
-            selected_items = [item.text() for item in list_widget.selectedItems()]
+            selected_items = [item.text() for item in var_list.selectedItems()]
             if len(selected_items) < 2:
-                QMessageBox.warning(self, '警告', '至少选择2个题项')
+                QMessageBox.warning(self, '警告', '请至少选择2个题项')
                 return
             
             data = self.df[selected_items].dropna()
             
-            def cronbach_alpha(items):
-                item_vars = items.var(axis=0, ddof=1)
-                total_var = items.sum(axis=1).var(ddof=1)
-                k = items.shape[1]
-                if k < 2 or total_var == 0:
+            def cronbach_alpha(data):
+                k = data.shape[1]
+                if k < 2:
                     return 0
-                alpha = (k / (k - 1)) * (1 - item_vars.sum() / total_var)
+                variances = data.var(axis=0, ddof=1)
+                total_variance = data.sum(axis=1).var(ddof=1)
+                alpha = (k / (k - 1)) * (1 - variances.sum() / total_variance)
                 return alpha
             
             alpha = cronbach_alpha(data)
             
-            interpretation = ''
+            result_html = f'<h2 style="color: #1e293b; margin-bottom: 20px;">信度分析</h2>'
+            result_html += f'<p style="color: #64748b; margin-bottom: 16px;">题项数: {len(selected_items)}</p>'
+            result_html += '<table style="border-collapse: collapse; width: 100%;">'
+            result_html += f'<tr><td style="padding: 10px 14px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600;">Cronbach\'s α</td><td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-size: 18px; font-weight: bold;">{alpha:.4f}</td></tr>'
+            result_html += '</table>'
+            
             if alpha >= 0.9:
-                interpretation = '优秀'
+                feedback = '优秀'
             elif alpha >= 0.8:
-                interpretation = '良好'
+                feedback = '良好'
             elif alpha >= 0.7:
-                interpretation = '可接受'
+                feedback = '可接受'
             elif alpha >= 0.6:
-                interpretation = '一般'
+                feedback = '一般'
             else:
-                interpretation = '较差'
+                feedback = '较差'
             
-            result_html = f'''
-            <h2>信度分析 - Cronbach's α</h2>
-            <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-            <tr><td><b>Cronbach's α</b></td><td>{alpha:.4f}</td></tr>
-            <tr><td><b>题项数</b></td><td>{len(selected_items)}</td></tr>
-            <tr><td><b>有效样本量</b></td><td>{len(data)}</td></tr>
-            <tr><td><b>评价</b></td><td>{interpretation}</td></tr>
-            </table>
-            <p><b>题项:</b> {', '.join(selected_items)}</p>
-            '''
-            
-            if item_analysis_check.isChecked():
-                result_html += '<h3>项目分析</h3>'
-                result_html += '''<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
-                <tr><th>题项</th><th>均值</th><th>标准差</th><th>与总分相关</th><th>删除后α</th></tr>'''
-                
-                total_scores = data.sum(axis=1)
-                
-                item_stats = []
-                for item in selected_items:
-                    item_data = data[item]
-                    item_mean = item_data.mean()
-                    item_std = item_data.std()
-                    item_corr = np.corrcoef(item_data, total_scores)[0, 1]
-                    temp_items = [i for i in selected_items if i != item]
-                    temp_alpha = cronbach_alpha(data[temp_items])
-                    item_stats.append((item, item_mean, item_std, item_corr, temp_alpha))
-                
-                item_stats.sort(key=lambda x: x[4], reverse=True)
-                
-                for item, mean, std, corr, alpha_if_deleted in item_stats:
-                    result_html += f'<tr><td>{item}</td><td>{mean:.4f}</td><td>{std:.4f}</td><td>{corr:.4f}</td><td>{alpha_if_deleted:.4f}</td></tr>'
-                
-                result_html += '</table>'
-                
-                if delete_items_check.isChecked():
-                    items_to_delete = []
-                    for item, _, _, _, alpha_if_deleted in item_stats:
-                        if alpha_if_deleted > alpha:
-                            items_to_delete.append(item)
-                    
-                    if items_to_delete:
-                        remaining_items = [i for i in selected_items if i not in items_to_delete]
-                        if len(remaining_items) >= 2:
-                            new_alpha = cronbach_alpha(data[remaining_items])
-                            result_html += f'<h4>删除低信度题项后</h4>'
-                            result_html += f'<p><b>剩余题项:</b> {", ".join(remaining_items)}</p>'
-                            result_html += f'<p><b>新的 Cronbach\'s α:</b> {new_alpha:.4f}</p>'
+            result_html += f'<p style="margin-top: 16px; font-size: 14px; font-weight: 600;">信度评价: {feedback}</p>'
             
             self.results_text.setHtml(result_html)
-            self.tab_widget.setCurrentWidget(self.results_text)
+            self.tab_widget.setCurrentIndex(1)
             dialog.accept()
         
-        calculate_btn.clicked.connect(calculate)
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
         dialog.exec()
     
     def show_histogram(self):
@@ -1675,118 +1576,281 @@ class AnalyXMainWindow(QMainWindow):
             QMessageBox.warning(self, '警告', '没有数值型数据')
             return
         
-        dialog = QDialog(self)
-        dialog.setWindowTitle('直方图')
-        dialog.resize(450, 350)
+        dialog = self.create_modern_dialog('直方图', 520, 380)
+        main_layout = dialog.layout()
         
-        main_layout = QVBoxLayout(dialog)
-        
-        var_group = QWidget()
-        var_layout = QVBoxLayout(var_group)
-        var_layout.addWidget(QLabel('选择变量:'))
-        
+        var_group = self.create_form_section('选择变量:')
         combo = QComboBox()
         combo.addItems(numeric_cols)
-        var_layout.addWidget(combo)
+        combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        var_group.layout().addWidget(combo)
         main_layout.addWidget(var_group)
         
-        chart_group = QWidget()
-        chart_layout = QVBoxLayout(chart_group)
-        chart_layout.addWidget(QLabel('图表选项:'))
-        
-        bins_group = QWidget()
-        bins_layout = QHBoxLayout(bins_group)
-        bins_layout.addWidget(QLabel('bins数量:'))
-        
-        bins_combo = QComboBox()
-        bins_combo.addItems(['自动', '10', '20', '30', '50', '100'])
-        bins_combo.setCurrentText('自动')
-        bins_layout.addWidget(bins_combo)
-        chart_layout.addWidget(bins_group)
-        
-        color_group = QWidget()
-        color_layout = QHBoxLayout(color_group)
-        color_layout.addWidget(QLabel('颜色:'))
-        
-        color_combo = QComboBox()
-        color_combo.addItems(['蓝色', '绿色', '红色', '橙色', '紫色', '灰色'])
-        color_combo.setCurrentText('蓝色')
-        color_layout.addWidget(color_combo)
-        chart_layout.addWidget(color_group)
-        
-        density_check = QCheckBox('显示密度曲线')
-        density_check.setChecked(False)
-        chart_layout.addWidget(density_check)
-        
-        mean_check = QCheckBox('显示均值线')
-        mean_check.setChecked(True)
-        chart_layout.addWidget(mean_check)
-        
-        main_layout.addWidget(chart_group)
-        
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        
-        cancel_btn = QPushButton('取消')
-        cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(cancel_btn)
-        
-        plot_btn = QPushButton('绘制')
-        plot_btn.setDefault(True)
-        btn_layout.addWidget(plot_btn)
-        
+        btn_layout = self.create_button_layout(dialog)
         main_layout.addLayout(btn_layout)
         
-        def plot():
+        def calculate():
             col = combo.currentText()
             data = self.df[col].dropna()
             
-            bins = 'auto' if bins_combo.currentText() == '自动' else int(bins_combo.currentText())
-            color_map = {
-                '蓝色': 'skyblue',
-                '绿色': 'lightgreen',
-                '红色': 'lightcoral',
-                '橙色': 'lightsalmon',
-                '紫色': 'plum',
-                '灰色': 'lightgray'
-            }
-            color = color_map.get(color_combo.currentText(), 'skyblue')
-            
             self.chart_canvas.figure.clear()
             ax = self.chart_canvas.figure.add_subplot(111)
-            
-            n, bins, patches = ax.hist(data, bins=bins, edgecolor='black', alpha=0.7, color=color)
-            
-            if density_check.isChecked():
-                sns.kdeplot(data, ax=ax, color='black', alpha=0.8)
-                ax.set_ylabel('密度')
-            else:
-                ax.set_ylabel('频数')
-            
-            if mean_check.isChecked():
-                mean_val = data.mean()
-                ax.axvline(x=mean_val, color='red', linestyle='--', linewidth=1.5, label=f'均值: {mean_val:.2f}')
-                ax.legend()
-            
-            ax.set_title(f'直方图 - {col}')
-            ax.set_xlabel(col)
-            ax.grid(True, alpha=0.3)
+            ax.hist(data, bins='auto', edgecolor='#e2e8f0', alpha=0.8, color='#6366f1')
+            ax.set_title(f'直方图 - {col}', fontsize=12, fontweight='bold')
+            ax.set_xlabel(col, fontsize=10)
+            ax.set_ylabel('频数', fontsize=10)
+            ax.grid(True, alpha=0.3, axis='y')
             self.chart_canvas.draw()
-            
-            self.tab_widget.setCurrentWidget(self.chart_canvas)
+            self.tab_widget.setCurrentIndex(2)
             dialog.accept()
         
-        plot_btn.clicked.connect(plot)
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
         dialog.exec()
     
     def show_boxplot(self):
-        pass
+        if self.df.empty:
+            QMessageBox.warning(self, '警告', '请先加载数据')
+            return
+        
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
+        if not numeric_cols:
+            QMessageBox.warning(self, '警告', '没有数值型数据')
+            return
+        
+        dialog = self.create_modern_dialog('箱线图', 520, 380)
+        main_layout = dialog.layout()
+        
+        var_group = self.create_form_section('选择变量 (可多选):')
+        var_list = QListWidget()
+        var_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        var_list.addItems(numeric_cols)
+        if numeric_cols:
+            var_list.setCurrentRow(0)
+        var_list.setStyleSheet('''
+            QListWidget {
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 8px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+            QListWidget::item {
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin: 2px 0;
+            }
+            QListWidget::item:selected {
+                background-color: #6366f1;
+                color: white;
+            }
+        ''')
+        var_group.layout().addWidget(var_list)
+        main_layout.addWidget(var_group)
+        
+        btn_layout = self.create_button_layout(dialog)
+        main_layout.addLayout(btn_layout)
+        
+        def calculate():
+            selected_items = [item.text() for item in var_list.selectedItems()]
+            if not selected_items:
+                QMessageBox.warning(self, '警告', '请至少选择一个变量')
+                return
+            
+            data = [self.df[col].dropna() for col in selected_items]
+            
+            self.chart_canvas.figure.clear()
+            ax = self.chart_canvas.figure.add_subplot(111)
+            bp = ax.boxplot(data, vert=True, patch_artist=True, labels=selected_items)
+            for patch in bp['boxes']:
+                patch.set_facecolor('#6366f1')
+                patch.set_alpha(0.7)
+            ax.set_title('箱线图', fontsize=12, fontweight='bold')
+            ax.set_ylabel('数值', fontsize=10)
+            ax.grid(True, alpha=0.3, axis='y')
+            self.chart_canvas.draw()
+            self.tab_widget.setCurrentIndex(2)
+            dialog.accept()
+        
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
+        dialog.exec()
     
     def show_scatterplot(self):
-        pass
+        if self.df.empty:
+            QMessageBox.warning(self, '警告', '请先加载数据')
+            return
+        
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
+        if len(numeric_cols) < 2:
+            QMessageBox.warning(self, '警告', '至少需要2个数值型变量')
+            return
+        
+        dialog = self.create_modern_dialog('散点图', 540, 420)
+        main_layout = dialog.layout()
+        
+        var_group = self.create_form_section('变量选择:')
+        var1_layout = QHBoxLayout()
+        var1_layout.setSpacing(12)
+        var1_label = QLabel('X 轴:')
+        var1_label.setFont(QFont('Inter', 11))
+        var1_label.setStyleSheet('color: #475569;')
+        var1_combo = QComboBox()
+        var1_combo.addItems(numeric_cols)
+        var1_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 10px 14px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        var1_layout.addWidget(var1_label)
+        var1_layout.addWidget(var1_combo)
+        var_group.layout().addLayout(var1_layout)
+        
+        var2_layout = QHBoxLayout()
+        var2_layout.setSpacing(12)
+        var2_label = QLabel('Y 轴:')
+        var2_label.setFont(QFont('Inter', 11))
+        var2_label.setStyleSheet('color: #475569;')
+        var2_combo = QComboBox()
+        var2_combo.addItems(numeric_cols)
+        if len(numeric_cols) > 1:
+            var2_combo.setCurrentIndex(1)
+        var2_combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 10px 14px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        var2_layout.addWidget(var2_label)
+        var2_layout.addWidget(var2_combo)
+        var_group.layout().addLayout(var2_layout)
+        main_layout.addWidget(var_group)
+        
+        btn_layout = self.create_button_layout(dialog)
+        main_layout.addLayout(btn_layout)
+        
+        def calculate():
+            col1 = var1_combo.currentText()
+            col2 = var2_combo.currentText()
+            
+            data = self.df[[col1, col2]].dropna()
+            
+            self.chart_canvas.figure.clear()
+            ax = self.chart_canvas.figure.add_subplot(111)
+            ax.scatter(data[col1], data[col2], alpha=0.7, color='#6366f1', s=50)
+            ax.set_title(f'散点图 - {col1} vs {col2}', fontsize=12, fontweight='bold')
+            ax.set_xlabel(col1, fontsize=10)
+            ax.set_ylabel(col2, fontsize=10)
+            ax.grid(True, alpha=0.3)
+            self.chart_canvas.draw()
+            self.tab_widget.setCurrentIndex(2)
+            dialog.accept()
+        
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
+        dialog.exec()
     
     def show_barchart(self):
-        pass
+        if self.df.empty:
+            QMessageBox.warning(self, '警告', '请先加载数据')
+            return
+        
+        all_cols = self.df.columns.tolist()
+        if not all_cols:
+            QMessageBox.warning(self, '警告', '没有数据')
+            return
+        
+        dialog = self.create_modern_dialog('条形图', 520, 400)
+        main_layout = dialog.layout()
+        
+        var_group = self.create_form_section('选择分类变量:')
+        combo = QComboBox()
+        combo.addItems(all_cols)
+        combo.setStyleSheet('''
+            QComboBox {
+                background-color: #f8fafc;
+                color: #1e293b;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 16px;
+                font-family: Inter;
+                font-size: 12px;
+            }
+        ''')
+        var_group.layout().addWidget(combo)
+        main_layout.addWidget(var_group)
+        
+        btn_layout = self.create_button_layout(dialog)
+        main_layout.addLayout(btn_layout)
+        
+        def calculate():
+            col = combo.currentText()
+            data = self.df[col].dropna()
+            counts = data.value_counts()
+            
+            self.chart_canvas.figure.clear()
+            ax = self.chart_canvas.figure.add_subplot(111)
+            colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
+            bars = ax.bar(range(len(counts)), counts.values, color=colors[:len(counts)], alpha=0.8)
+            ax.set_xticks(range(len(counts)))
+            ax.set_xticklabels(counts.index, rotation=45, ha='right')
+            ax.set_title(f'条形图 - {col}', fontsize=12, fontweight='bold')
+            ax.set_ylabel('频数', fontsize=10)
+            ax.grid(True, alpha=0.3, axis='y')
+            self.chart_canvas.figure.tight_layout()
+            self.chart_canvas.draw()
+            self.tab_widget.setCurrentIndex(2)
+            dialog.accept()
+        
+        self.setup_dialog_buttons(dialog, btn_layout, calculate)
+        dialog.exec()
     
     def show_heatmap(self):
-        pass
+        if self.df.empty:
+            QMessageBox.warning(self, '警告', '请先加载数据')
+            return
+        
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
+        if len(numeric_cols) < 2:
+            QMessageBox.warning(self, '警告', '至少需要2个数值型变量')
+            return
+        
+        self.chart_canvas.figure.clear()
+        ax = self.chart_canvas.figure.add_subplot(111)
+        corr_matrix = self.df[numeric_cols].corr()
+        im = ax.imshow(corr_matrix, cmap='RdBu_r', vmin=-1, vmax=1)
+        
+        ax.set_xticks(range(len(numeric_cols)))
+        ax.set_yticks(range(len(numeric_cols)))
+        ax.set_xticklabels(numeric_cols, rotation=45, ha='right')
+        ax.set_yticklabels(numeric_cols)
+        ax.set_title('相关系数热力图', fontsize=12, fontweight='bold')
+        
+        for i in range(len(numeric_cols)):
+            for j in range(len(numeric_cols)):
+                ax.text(j, i, f'{corr_matrix.iloc[i, j]:.2f}', 
+                       ha='center', va='center', color='white', fontweight='bold')
+        
+        self.chart_canvas.figure.colorbar(im, ax=ax)
+        self.chart_canvas.figure.tight_layout()
+        self.chart_canvas.draw()
+        self.tab_widget.setCurrentIndex(2)
