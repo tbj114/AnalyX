@@ -7,82 +7,84 @@ class ModernTitleBar(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedHeight(36)
+        self.setFixedHeight(48)
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(15, 0, 15, 0)
+        self.layout.setContentsMargins(20, 0, 20, 0)
         
-        self.setAutoFillBackground(True)
-        palette = self.palette()
-        palette.setColor(QPalette.ColorRole.Window, QColor(20, 20, 25))
-        self.setPalette(palette)
+        # Modern gradient background
+        self.setStyleSheet('''
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6a9bcc, stop:1 #788c5d);
+            }
+        ''')
         
         self.logo_label = QLabel('AnalyX')
-        self.logo_label.setFont(QFont('Arial', 12, QFont.Weight.Bold))
-        self.logo_label.setStyleSheet('color: #6a9bcc;')
+        self.logo_label.setFont(QFont('Poppins', 14, QFont.Weight.Bold))
+        self.logo_label.setStyleSheet('color: #faf9f5;')
         
         self.title_label = QLabel('学术统计软件')
-        self.title_label.setFont(QFont('Arial', 10))
+        self.title_label.setFont(QFont('Lora', 11))
         self.title_label.setStyleSheet('color: #faf9f5;')
         
         title_layout = QHBoxLayout()
         title_layout.addWidget(self.logo_label)
         title_layout.addWidget(QLabel(' - '))
         title_layout.addWidget(self.title_label)
-        title_layout.setSpacing(4)
+        title_layout.setSpacing(8)
         
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(6)
+        button_layout.setSpacing(8)
         
+        # Modern minimize button
         self.min_button = QPushButton('—')
-        self.min_button.setFixedSize(24, 24)
+        self.min_button.setFixedSize(32, 32)
         self.min_button.setStyleSheet('''
             QPushButton {
-                background-color: transparent;
-                color: #b0aea5;
-                border: 1px solid #333333;
-                border-radius: 3px;
-                font-size: 14px;
+                background-color: rgba(255, 255, 255, 0.2);
+                color: #faf9f5;
+                border: none;
+                border-radius: 6px;
+                font-size: 16px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #333333;
-                color: #faf9f5;
+                background-color: rgba(255, 255, 255, 0.3);
             }
         ''')
         self.min_button.clicked.connect(self.parent.showMinimized)
         
+        # Modern maximize button
         self.max_button = QPushButton('□')
-        self.max_button.setFixedSize(24, 24)
+        self.max_button.setFixedSize(32, 32)
         self.max_button.setStyleSheet('''
             QPushButton {
-                background-color: transparent;
-                color: #b0aea5;
-                border: 1px solid #333333;
-                border-radius: 3px;
-                font-size: 12px;
+                background-color: rgba(255, 255, 255, 0.2);
+                color: #faf9f5;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #333333;
-                color: #faf9f5;
+                background-color: rgba(255, 255, 255, 0.3);
             }
         ''')
         self.max_button.clicked.connect(self.toggle_maximize)
         
+        # Modern close button
         self.close_button = QPushButton('✕')
-        self.close_button.setFixedSize(24, 24)
+        self.close_button.setFixedSize(32, 32)
         self.close_button.setStyleSheet('''
             QPushButton {
-                background-color: transparent;
-                color: #d97757;
-                border: 1px solid #443333;
-                border-radius: 3px;
-                font-size: 12px;
+                background-color: rgba(217, 119, 87, 0.7);
+                color: #faf9f5;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #d97757;
-                color: #141413;
+                background-color: rgba(217, 119, 87, 0.9);
             }
         ''')
         self.close_button.clicked.connect(self.parent.close)

@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QMenu, QAction
-from PyQt6.QtGui import QPalette, QColor
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QMenu
+from PyQt6.QtGui import QPalette, QColor, QFont, QAction
 
 
 class ModernMenuBar(QWidget):
@@ -7,13 +7,16 @@ class ModernMenuBar(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(10, 0, 10, 0)
+        self.layout.setContentsMargins(20, 0, 20, 0)
         self.layout.setSpacing(0)
         
-        self.setAutoFillBackground(True)
-        palette = self.palette()
-        palette.setColor(QPalette.ColorRole.Window, QColor(25, 25, 30))
-        self.setPalette(palette)
+        # Modern background
+        self.setStyleSheet('''
+            QWidget {
+                background-color: #f8f7f3;
+                border-bottom: 1px solid #e8e6dc;
+            }
+        ''')
         
         menu_items = [
             ('文件', [
@@ -68,14 +71,17 @@ class ModernMenuBar(QWidget):
         
         for menu_name, items in menu_items:
             menu_button = QPushButton(menu_name)
+            menu_button.setFont(QFont('Poppins', 11, QFont.Weight.Medium))
             menu_button.setStyleSheet('''
                 QPushButton {
                     background-color: transparent;
-                    color: #b0aea5;
+                    color: #141413;
                     border: none;
-                    padding: 8px 16px;
+                    padding: 10px 20px;
                     font-size: 11px;
                     font-weight: 500;
+                    border-radius: 6px;
+                    margin: 4px 2px;
                 }
                 QPushButton:hover {
                     background-color: rgba(106, 155, 204, 0.1);
@@ -83,6 +89,29 @@ class ModernMenuBar(QWidget):
                 }
             ''')
             menu = QMenu(menu_button)
+            menu.setStyleSheet('''
+                QMenu {
+                    background-color: white;
+                    color: #141413;
+                    border: 1px solid #e8e6dc;
+                    border-radius: 6px;
+                    padding: 4px 0;
+                    font-family: Lora;
+                }
+                QMenu::item {
+                    padding: 8px 24px;
+                    border: none;
+                }
+                QMenu::item:selected {
+                    background-color: rgba(106, 155, 204, 0.1);
+                    color: #6a9bcc;
+                }
+                QMenu::separator {
+                    height: 1px;
+                    background-color: #e8e6dc;
+                    margin: 4px 0;
+                }
+            ''')
             self.add_menu_items(menu, items)
             menu_button.setMenu(menu)
             self.layout.addWidget(menu_button)
@@ -102,4 +131,22 @@ class ModernMenuBar(QWidget):
             elif len(item) == 4:
                 text, shortcut, callback, subitems = item
                 submenu = menu.addMenu(text)
+                submenu.setStyleSheet('''
+                    QMenu {
+                        background-color: white;
+                        color: #141413;
+                        border: 1px solid #e8e6dc;
+                        border-radius: 6px;
+                        padding: 4px 0;
+                        font-family: Lora;
+                    }
+                    QMenu::item {
+                        padding: 8px 24px;
+                        border: none;
+                    }
+                    QMenu::item:selected {
+                        background-color: rgba(106, 155, 204, 0.1);
+                        color: #6a9bcc;
+                    }
+                ''')
                 self.add_menu_items(submenu, subitems)

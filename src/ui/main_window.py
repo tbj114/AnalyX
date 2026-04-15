@@ -17,10 +17,10 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QListWidget,
     QTextEdit, QFileDialog, QMessageBox, QDialog, QComboBox,
     QDoubleSpinBox, QPushButton, QLabel, QTabWidget,
-    QHeaderView, QCheckBox, QGridLayout
+    QHeaderView, QCheckBox, QGridLayout, QSpacerItem, QSizePolicy
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QPalette, QColor
+from PyQt6.QtCore import Qt, QTimer, QPoint
+from PyQt6.QtGui import QFont, QPalette, QColor, QLinearGradient, QBrush, QPainter, QPen, QIcon
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
@@ -29,7 +29,7 @@ from .menu_bar import ModernMenuBar
 from .tool_bar import ModernToolBar
 from .status_bar import ModernStatusBar
 from .editable_header import EditableHeaderView
-from ..utils import DataHandler, FileHandler
+from utils import DataHandler, FileHandler
 
 
 class AnalyXMainWindow(QMainWindow):
@@ -38,7 +38,7 @@ class AnalyXMainWindow(QMainWindow):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.df = pd.DataFrame()
         self.current_file = None
-        self.dark_theme = True
+        self.dark_theme = False  # Changed to light theme by default
         self.init_ui()
     
     def init_ui(self):
@@ -50,38 +50,52 @@ class AnalyXMainWindow(QMainWindow):
         self.main_layout = QVBoxLayout(self.main_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         
+        # Create a gradient background widget
+        self.background_widget = QWidget()
+        self.background_layout = QVBoxLayout(self.background_widget)
+        self.background_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.title_bar = ModernTitleBar(self)
-        self.main_layout.addWidget(self.title_bar)
+        self.background_layout.addWidget(self.title_bar)
         
         self.menu_bar = ModernMenuBar(self)
-        self.main_layout.addWidget(self.menu_bar)
+        self.background_layout.addWidget(self.menu_bar)
         
         self.tool_bar = ModernToolBar(self)
-        self.main_layout.addWidget(self.tool_bar)
+        self.background_layout.addWidget(self.tool_bar)
         
         self.content_widget = QWidget()
         self.content_layout = QHBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(0, 0, 0, 0)
-        self.content_layout.setSpacing(0)
+        self.content_layout.setContentsMargins(20, 20, 20, 20)
+        self.content_layout.setSpacing(20)
         
+        # Sidebar with artistic design
         self.sidebar = QWidget()
-        self.sidebar.setFixedWidth(180)
+        self.sidebar.setFixedWidth(200)
         self.sidebar_layout = QVBoxLayout(self.sidebar)
         self.sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        self.sidebar_layout.setSpacing(0)
         
+        # Sidebar header with gradient
         sidebar_header = QWidget()
-        sidebar_header.setFixedHeight(40)
+        sidebar_header.setFixedHeight(60)
+        sidebar_header.setStyleSheet('''
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6a9bcc, stop:1 #788c5d);
+                border-radius: 8px 8px 0 0;
+            }
+        ''')
         sidebar_header_layout = QVBoxLayout(sidebar_header)
-        sidebar_header_layout.setContentsMargins(15, 0, 15, 0)
-        sidebar_header_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sidebar_header_layout.setContentsMargins(20, 0, 20, 0)
         
         sidebar_title = QLabel('分析工具')
-        sidebar_title.setFont(QFont('Arial', 12, QFont.Weight.Bold))
-        sidebar_title.setStyleSheet('color: #6a9bcc;')
-        sidebar_header_layout.addWidget(sidebar_title)
+        sidebar_title.setFont(QFont('Poppins', 14, QFont.Weight.Bold))
+        sidebar_title.setStyleSheet('color: #faf9f5;')
+        sidebar_header_layout.addWidget(sidebar_title, alignment=Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
         
         self.sidebar_layout.addWidget(sidebar_header)
         
+        # Navigation list with modern styling
         self.nav_list = QListWidget()
         self.nav_list.addItems([
             '描述统计',
@@ -94,15 +108,17 @@ class AnalyXMainWindow(QMainWindow):
         ])
         self.nav_list.setStyleSheet('''
             QListWidget {
-                background-color: #222227;
-                color: #b0aea5;
+                background-color: #faf9f5;
+                color: #141413;
                 border: none;
-                padding: 5px 0;
+                padding: 10px 0;
+                border-radius: 0 0 8px 8px;
             }
             QListWidget::item {
-                padding: 8px 15px;
-                border-left: 2px solid transparent;
-                font-size: 11px;
+                padding: 12px 20px;
+                border-left: 3px solid transparent;
+                font-size: 12px;
+                font-family: 'Lora';
             }
             QListWidget::item:hover {
                 background-color: rgba(106, 155, 204, 0.1);
@@ -111,56 +127,75 @@ class AnalyXMainWindow(QMainWindow):
             QListWidget::item:selected {
                 background-color: rgba(106, 155, 204, 0.2);
                 color: #6a9bcc;
-                border-left: 2px solid #6a9bcc;
+                border-left: 3px solid #6a9bcc;
             }
         ''')
         self.nav_list.itemClicked.connect(self.on_nav_item_clicked)
         self.sidebar_layout.addWidget(self.nav_list)
         
+        # Sidebar footer
         sidebar_footer = QWidget()
-        sidebar_footer.setFixedHeight(50)
+        sidebar_footer.setFixedHeight(60)
+        sidebar_footer.setStyleSheet('''
+            QWidget {
+                background-color: #faf9f5;
+                border-radius: 0 0 8px 8px;
+            }
+        ''')
         sidebar_footer_layout = QVBoxLayout(sidebar_footer)
-        sidebar_footer_layout.setContentsMargins(15, 0, 15, 0)
+        sidebar_footer_layout.setContentsMargins(20, 0, 20, 0)
         
         version_label = QLabel('版本 1.0')
-        version_label.setStyleSheet('color: #777777; font-size: 10px;')
+        version_label.setStyleSheet('color: #777777; font-size: 10px; font-family: Lora;')
         sidebar_footer_layout.addWidget(version_label, alignment=Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter)
         
         self.sidebar_layout.addWidget(sidebar_footer)
         
+        # Workspace with card-like design
         self.workspace = QWidget()
+        self.workspace.setStyleSheet('''
+            QWidget {
+                background-color: #faf9f5;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            }
+        ''')
         self.workspace_layout = QVBoxLayout(self.workspace)
-        self.workspace_layout.setContentsMargins(0, 0, 0, 0)
+        self.workspace_layout.setContentsMargins(20, 20, 20, 20)
+        self.workspace_layout.setSpacing(15)
         
+        # Tab widget with modern styling
         self.tab_widget = QTabWidget()
         self.tab_widget.setStyleSheet('''
             QTabWidget {
-                background-color: #1a1a20;
-                color: #faf9f5;
+                background-color: transparent;
+                color: #141413;
             }
             QTabBar {
-                background-color: #222227;
-                height: 48px;
+                background-color: transparent;
+                height: 50px;
+                padding-left: 10px;
             }
             QTabBar::tab {
-                background-color: #222227;
+                background-color: transparent;
                 color: #b0aea5;
                 padding: 0 30px;
                 font-size: 13px;
                 font-weight: 500;
+                font-family: Poppins;
                 border-bottom: 3px solid transparent;
+                margin-right: 10px;
             }
             QTabBar::tab:hover {
-                background-color: #2a2a30;
-                color: #faf9f5;
+                color: #6a9bcc;
             }
             QTabBar::tab:selected {
-                background-color: #1a1a20;
                 color: #6a9bcc;
                 border-bottom: 3px solid #6a9bcc;
             }
         ''')
         
+        # Data table with modern styling
         self.data_table = QTableWidget()
         self.data_table.setAlternatingRowColors(True)
         self.data_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectItems)
@@ -168,46 +203,68 @@ class AnalyXMainWindow(QMainWindow):
         self.data_table.setHorizontalHeader(self.header_view)
         self.data_table.setStyleSheet('''
             QTableWidget {
-                background-color: #1a1a20;
-                color: #faf9f5;
-                border: none;
+                background-color: white;
+                color: #141413;
+                border: 1px solid #e8e6dc;
+                border-radius: 6px;
+                gridline-color: #e8e6dc;
             }
             QTableWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #2a2a30;
+                padding: 10px;
+                border-bottom: 1px solid #e8e6dc;
+                font-family: Lora;
             }
             QTableWidget::item:selected {
-                background-color: rgba(106, 155, 204, 0.2);
+                background-color: rgba(106, 155, 204, 0.1);
                 color: #6a9bcc;
             }
             QHeaderView::section {
-                background-color: #222227;
-                color: #b0aea5;
-                padding: 10px;
+                background-color: #f8f7f3;
+                color: #141413;
+                padding: 12px;
                 border: none;
-                border-bottom: 1px solid #3a3a40;
+                border-bottom: 1px solid #e8e6dc;
                 font-size: 12px;
                 font-weight: 500;
+                font-family: Poppins;
+            }
+            QHeaderView::section:horizontal {
+                border-right: 1px solid #e8e6dc;
             }
         ''')
         self.data_table.cellChanged.connect(self.on_cell_changed)
         self.tab_widget.addTab(self.data_table, '数据视图')
         
+        # Results text with modern styling
         self.results_text = QTextEdit()
         self.results_text.setReadOnly(True)
         self.results_text.setFont(QFont('Consolas', 11))
         self.results_text.setStyleSheet('''
             QTextEdit {
-                background-color: #1a1a20;
-                color: #faf9f5;
-                border: none;
+                background-color: white;
+                color: #141413;
+                border: 1px solid #e8e6dc;
+                border-radius: 6px;
                 padding: 20px;
+                font-family: Lora;
             }
         ''')
         self.tab_widget.addTab(self.results_text, '分析结果')
         
+        # Chart canvas with modern styling
         self.chart_canvas = FigureCanvas(Figure(figsize=(10, 7)))
-        self.tab_widget.addTab(self.chart_canvas, '图表')
+        chart_container = QWidget()
+        chart_container.setStyleSheet('''
+            QWidget {
+                background-color: white;
+                border: 1px solid #e8e6dc;
+                border-radius: 6px;
+            }
+        ''')
+        chart_layout = QVBoxLayout(chart_container)
+        chart_layout.setContentsMargins(10, 10, 10, 10)
+        chart_layout.addWidget(self.chart_canvas)
+        self.tab_widget.addTab(chart_container, '图表')
         
         self.workspace_layout.addWidget(self.tab_widget)
         
@@ -216,40 +273,251 @@ class AnalyXMainWindow(QMainWindow):
         
         self.status_bar = ModernStatusBar(self)
         
-        self.main_layout.addWidget(self.content_widget)
-        self.main_layout.addWidget(self.status_bar)
+        self.background_layout.addWidget(self.content_widget)
+        self.background_layout.addWidget(self.status_bar)
+        
+        self.main_layout.addWidget(self.background_widget)
         
         self.apply_theme()
         self.load_sample_data()
     
     def apply_theme(self):
-        palette = QPalette()
-        palette.setColor(QPalette.ColorRole.Window, QColor(30, 30, 35))
-        palette.setColor(QPalette.ColorRole.WindowText, QColor(220, 220, 220))
-        palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 30))
-        palette.setColor(QPalette.ColorRole.AlternateBase, QColor(40, 40, 45))
-        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(50, 50, 55))
-        palette.setColor(QPalette.ColorRole.ToolTipText, QColor(220, 220, 220))
-        palette.setColor(QPalette.ColorRole.Text, QColor(220, 220, 220))
-        palette.setColor(QPalette.ColorRole.Button, QColor(45, 45, 50))
-        palette.setColor(QPalette.ColorRole.ButtonText, QColor(220, 220, 220))
-        palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 70, 70))
-        palette.setColor(QPalette.ColorRole.Link, QColor(70, 140, 255))
-        palette.setColor(QPalette.ColorRole.Highlight, QColor(70, 140, 255))
-        palette.setColor(QPalette.ColorRole.HighlightedText, QColor(20, 20, 25))
-        QApplication.setPalette(palette)
-        plt.style.use('seaborn-v0_8-dark')
-        self.content_widget.setStyleSheet('''
-            QWidget {
-                background-color: #222222;
-                border: 1px solid #333333;
-            }
-        ''')
-        self.main_widget.setStyleSheet('''
-            QWidget {
-                background-color: #1a1a1a;
-            }
-        ''')
+        if self.dark_theme:
+            # Dark theme
+            palette = QPalette()
+            palette.setColor(QPalette.ColorRole.Window, QColor(30, 30, 35))
+            palette.setColor(QPalette.ColorRole.WindowText, QColor(220, 220, 220))
+            palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 30))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(40, 40, 45))
+            palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(50, 50, 55))
+            palette.setColor(QPalette.ColorRole.ToolTipText, QColor(220, 220, 220))
+            palette.setColor(QPalette.ColorRole.Text, QColor(220, 220, 220))
+            palette.setColor(QPalette.ColorRole.Button, QColor(45, 45, 50))
+            palette.setColor(QPalette.ColorRole.ButtonText, QColor(220, 220, 220))
+            palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 70, 70))
+            palette.setColor(QPalette.ColorRole.Link, QColor(70, 140, 255))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor(70, 140, 255))
+            palette.setColor(QPalette.ColorRole.HighlightedText, QColor(20, 20, 25))
+            QApplication.setPalette(palette)
+            plt.style.use('seaborn-v0_8-dark')
+            
+            # Update styles for dark theme
+            self.background_widget.setStyleSheet('''
+                QWidget {
+                    background-color: #1a1a1a;
+                }
+            ''')
+            
+            self.sidebar.setStyleSheet('''
+                QWidget {
+                    background-color: #222227;
+                    border-radius: 8px;
+                }
+            ''')
+            
+            self.nav_list.setStyleSheet('''
+                QListWidget {
+                    background-color: #222227;
+                    color: #b0aea5;
+                    border: none;
+                    padding: 10px 0;
+                    border-radius: 0 0 8px 8px;
+                }
+                QListWidget::item {
+                    padding: 12px 20px;
+                    border-left: 3px solid transparent;
+                    font-size: 12px;
+                    font-family: 'Lora';
+                }
+                QListWidget::item:hover {
+                    background-color: rgba(106, 155, 204, 0.1);
+                    color: #6a9bcc;
+                }
+                QListWidget::item:selected {
+                    background-color: rgba(106, 155, 204, 0.2);
+                    color: #6a9bcc;
+                    border-left: 3px solid #6a9bcc;
+                }
+            ''')
+            
+            self.workspace.setStyleSheet('''
+                QWidget {
+                    background-color: #222227;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                }
+            ''')
+            
+            self.data_table.setStyleSheet('''
+                QTableWidget {
+                    background-color: #1a1a20;
+                    color: #faf9f5;
+                    border: 1px solid #333333;
+                    border-radius: 6px;
+                    gridline-color: #333333;
+                }
+                QTableWidget::item {
+                    padding: 10px;
+                    border-bottom: 1px solid #333333;
+                    font-family: Lora;
+                }
+                QTableWidget::item:selected {
+                    background-color: rgba(106, 155, 204, 0.2);
+                    color: #6a9bcc;
+                }
+                QHeaderView::section {
+                    background-color: #222227;
+                    color: #b0aea5;
+                    padding: 12px;
+                    border: none;
+                    border-bottom: 1px solid #333333;
+                    font-size: 12px;
+                    font-weight: 500;
+                    font-family: Poppins;
+                }
+                QHeaderView::section:horizontal {
+                    border-right: 1px solid #333333;
+                }
+            ''')
+            
+            self.results_text.setStyleSheet('''
+                QTextEdit {
+                    background-color: #1a1a20;
+                    color: #faf9f5;
+                    border: 1px solid #333333;
+                    border-radius: 6px;
+                    padding: 20px;
+                    font-family: Lora;
+                }
+            ''')
+            
+            if self.tab_widget.count() > 2:
+                chart_container = self.tab_widget.widget(2)
+                chart_container.setStyleSheet('''
+                    QWidget {
+                        background-color: #1a1a20;
+                        border: 1px solid #333333;
+                        border-radius: 6px;
+                    }
+                ''')
+        else:
+            # Light theme
+            palette = QPalette()
+            palette.setColor(QPalette.ColorRole.Window, QColor(250, 249, 245))
+            palette.setColor(QPalette.ColorRole.WindowText, QColor(20, 20, 19))
+            palette.setColor(QPalette.ColorRole.Base, QColor(255, 255, 255))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(248, 247, 243))
+            palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 255))
+            palette.setColor(QPalette.ColorRole.ToolTipText, QColor(20, 20, 19))
+            palette.setColor(QPalette.ColorRole.Text, QColor(20, 20, 19))
+            palette.setColor(QPalette.ColorRole.Button, QColor(240, 238, 232))
+            palette.setColor(QPalette.ColorRole.ButtonText, QColor(20, 20, 19))
+            palette.setColor(QPalette.ColorRole.BrightText, QColor(217, 119, 87))
+            palette.setColor(QPalette.ColorRole.Link, QColor(106, 155, 204))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor(106, 155, 204))
+            palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+            QApplication.setPalette(palette)
+            plt.style.use('seaborn-v0_8-whitegrid')
+            
+            # Update styles for light theme
+            self.background_widget.setStyleSheet('''
+                QWidget {
+                    background-color: #faf9f5;
+                }
+            ''')
+            
+            self.sidebar.setStyleSheet('''
+                QWidget {
+                    background-color: #faf9f5;
+                    border-radius: 8px;
+                }
+            ''')
+            
+            self.nav_list.setStyleSheet('''
+                QListWidget {
+                    background-color: #faf9f5;
+                    color: #141413;
+                    border: none;
+                    padding: 10px 0;
+                    border-radius: 0 0 8px 8px;
+                }
+                QListWidget::item {
+                    padding: 12px 20px;
+                    border-left: 3px solid transparent;
+                    font-size: 12px;
+                    font-family: 'Lora';
+                }
+                QListWidget::item:hover {
+                    background-color: rgba(106, 155, 204, 0.1);
+                    color: #6a9bcc;
+                }
+                QListWidget::item:selected {
+                    background-color: rgba(106, 155, 204, 0.2);
+                    color: #6a9bcc;
+                    border-left: 3px solid #6a9bcc;
+                }
+            ''')
+            
+            self.workspace.setStyleSheet('''
+                QWidget {
+                    background-color: #faf9f5;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                }
+            ''')
+            
+            self.data_table.setStyleSheet('''
+                QTableWidget {
+                    background-color: white;
+                    color: #141413;
+                    border: 1px solid #e8e6dc;
+                    border-radius: 6px;
+                    gridline-color: #e8e6dc;
+                }
+                QTableWidget::item {
+                    padding: 10px;
+                    border-bottom: 1px solid #e8e6dc;
+                    font-family: Lora;
+                }
+                QTableWidget::item:selected {
+                    background-color: rgba(106, 155, 204, 0.1);
+                    color: #6a9bcc;
+                }
+                QHeaderView::section {
+                    background-color: #f8f7f3;
+                    color: #141413;
+                    padding: 12px;
+                    border: none;
+                    border-bottom: 1px solid #e8e6dc;
+                    font-size: 12px;
+                    font-weight: 500;
+                    font-family: Poppins;
+                }
+                QHeaderView::section:horizontal {
+                    border-right: 1px solid #e8e6dc;
+                }
+            ''')
+            
+            self.results_text.setStyleSheet('''
+                QTextEdit {
+                    background-color: white;
+                    color: #141413;
+                    border: 1px solid #e8e6dc;
+                    border-radius: 6px;
+                    padding: 20px;
+                    font-family: Lora;
+                }
+            ''')
+            
+            if self.tab_widget.count() > 2:
+                chart_container = self.tab_widget.widget(2)
+                chart_container.setStyleSheet('''
+                    QWidget {
+                        background-color: white;
+                        border: 1px solid #e8e6dc;
+                        border-radius: 6px;
+                    }
+                ''')
     
     def load_sample_data(self):
         self.df = DataHandler.load_sample_data()

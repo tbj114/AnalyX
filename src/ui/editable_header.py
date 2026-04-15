@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QHeaderView, QLineEdit
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
 
 class EditableHeaderView(QHeaderView):
@@ -24,8 +25,24 @@ class EditableHeaderView(QHeaderView):
         rect = self.sectionRect(index)
         
         self.editor = QLineEdit(self)
-        self.editor.setText(self.model().headerData(index, self.orientation()))
+        self.editor.setText(self.model().headerData(index, self.orientation))
         self.editor.setGeometry(rect)
+        self.editor.setFont(QFont('Lora', 12))
+        self.editor.setStyleSheet('''
+            QLineEdit {
+                background-color: white;
+                color: #141413;
+                border: 2px solid #6a9bcc;
+                border-radius: 4px;
+                padding: 8px;
+                font-family: Lora;
+                font-size: 12px;
+            }
+            QLineEdit:focus {
+                outline: none;
+                box-shadow: 0 0 0 2px rgba(106, 155, 204, 0.2);
+            }
+        ''')
         self.editor.selectAll()
         self.editor.setFocus()
         
@@ -36,9 +53,9 @@ class EditableHeaderView(QHeaderView):
         if self.editing_index != -1 and self.editor:
             new_text = self.editor.text()
             if new_text:
-                old_text = self.model().headerData(self.editing_index, self.orientation())
+                old_text = self.model().headerData(self.editing_index, self.orientation)
                 if old_text != new_text:
-                    self.model().setHeaderData(self.editing_index, self.orientation(), new_text)
+                    self.model().setHeaderData(self.editing_index, self.orientation, new_text)
                     self.parent().on_header_changed(self.editing_index, new_text)
             
             self.editor.deleteLater()

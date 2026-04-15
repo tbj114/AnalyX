@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QProgressBar
-from PyQt6.QtGui import QPalette, QColor
+from PyQt6.QtGui import QPalette, QColor, QFont
 
 
 class ModernStatusBar(QWidget):
@@ -7,35 +7,40 @@ class ModernStatusBar(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(10, 4, 10, 4)
-        self.layout.setSpacing(15)
+        self.layout.setContentsMargins(20, 8, 20, 8)
+        self.layout.setSpacing(20)
         
-        self.setAutoFillBackground(True)
-        palette = self.palette()
-        palette.setColor(QPalette.ColorRole.Window, QColor(20, 20, 25))
-        self.setPalette(palette)
+        # Modern background
+        self.setStyleSheet('''
+            QWidget {
+                background-color: #f8f7f3;
+                border-top: 1px solid #e8e6dc;
+            }
+        ''')
         
         self.status_label = QLabel('就绪')
-        self.status_label.setStyleSheet('color: #b0aea5; font-size: 11px;')
+        self.status_label.setFont(QFont('Lora', 10))
+        self.status_label.setStyleSheet('color: #141413; font-size: 10px;')
         
         self.data_info_label = QLabel('无数据')
-        self.data_info_label.setStyleSheet('color: #788c5d; font-size: 11px;')
+        self.data_info_label.setFont(QFont('Lora', 10))
+        self.data_info_label.setStyleSheet('color: #788c5d; font-size: 10px;')
         
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        self.progress_bar.setFixedWidth(150)
+        self.progress_bar.setFixedWidth(200)
         self.progress_bar.setStyleSheet('''
             QProgressBar {
-                background-color: #2a2a30;
-                border: 1px solid #3a3a40;
-                border-radius: 3px;
+                background-color: #e8e6dc;
+                border: none;
+                border-radius: 6px;
                 text-align: center;
-                color: #faf9f5;
-                height: 10px;
+                color: #141413;
+                height: 6px;
             }
             QProgressBar::chunk {
                 background-color: #6a9bcc;
-                border-radius: 2px;
+                border-radius: 6px;
             }
         ''')
         
